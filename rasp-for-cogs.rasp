@@ -1,0 +1,1190 @@
+# THIS IS SEPARATE FROM RASP-for-ReCOGS which was solved earlier, separately, see https://github.com/willy-b/learning-rasp/blob/main/word-level-pos-tokens-recogs-style-decoder-loop.rasp and the draft paper for the ReCOGS solution at https://raw.githubusercontent.com/willy-b/RASP-for-ReCOGS/main/rasp-for-recogs_pos-wbruns-2024-draft.pdf .
+
+# A solution for the "COGS: A Compositional Generalization Challenge Based on Semantic Interpretation"
+# (Kim and Linzen 2020, https://aclanthology.org/2020.emnlp-main.731 ) task is being worked on here.
+
+# To try this out, run `python cogs_examples_in_rasp.py`!
+
+# Note, it is simpler and more performant to just train a Transformer on examples!
+# This is an academic exercise, writing a neural network compatible program by hand in the Restricted Access Sequence Processing (compilable to Transformer) language (Weiss et al 2021, https://arxiv.org/abs/2106.06981 )
+# to prove a Transformer can perform a particular type of solution (a systematic and compositional solution, unrolling recursive grammar using the decoder loop).
+
+# See cogs_examples_in_rasp.py for a way to run this. Alteratively use the RASP interpreter REPL to run it line by line and see the output.
+
+# We want to show a Transformer can solve the structural generalization splits of the "COGS: A Compositional Generalization Challenge Based on Semantic Interpretation"
+# (Kim and Linzen 2020, https://aclanthology.org/2020.emnlp-main.731 ) task (though this is written without reference to that material based on train.tsv and we won't know how it does on those until the end).
+
+# (We made use of the convenient summary of Kim, Linzen's COGS task grammar and vocab made by IBM's CPG project (their utilities, not their CPG project itself) at https://github.com/IBM/cpg/blob/c3626b4e03bfc681be2c2a5b23da0b48abe6f570/src/model/cogs_data.py#L523 )
+
+# See also our finished RASP solution to the semantically equivalent ReCOGS task (Wu et al 2023, "ReCOGS: How Incidental Details of a Logical Form Overshadow an Evaluation of Semantic Interpretation", linked from the  draft paper at https://raw.githubusercontent.com/willy-b/RASP-for-ReCOGS/main/rasp-for-recogs_pos-wbruns-2024-draft.pdf ).
+
+set example ["a","boy","painted","the","girl"]
+
+# explanation of sequence values for part of speech and verb type:
+# det: 1
+# pp: 2
+# was: 3
+# by: 4
+# to: 5
+# that: 6:
+# common_noun: 7
+# proper_noun: 8
+# v_trans_omissible: 9
+# v_trans_omissible_pp: 10
+# v_trans_not_omissible: 11
+# v_trans_not_omissible_pp: 12
+# v_cp_taking: 13
+# v_inf_taking: 14
+# v_unacc: 15
+# v_unerg: 16
+# v_inf: 17
+# v_dat: 18
+# v_dat_pp: 19
+# v_unacc_pp: 20
+# v_normalized_in_output: 21
+
+# we are using these values with 1d embeddings for simplicity
+# we could also use 1 hot vectors of dimension 21 and then it is easier to see how checking for equality is easy with vector dot product
+# (and saying e.g. common_noun or proper_noun could be dot product with sum of 1-hot 21d vectors for (common_noun + proper_noun))
+# but we keep it simple for human reading here and use these scalars in 1d as is easily supported by RASP.
+
+word_token_to_part_of_speech_map = {
+"The":1,"the":1,"A":1,"a":1,"on":2,"in":2,"beside":2,"was":3,"by":4,"to":5,"that":6,"girl":7,"boy":7,"cat":7,"dog":7,"baby":7,"child":7,"teacher":7,"frog":7,"chicken":7,"mouse":7,"lion":7,"monkey":7,"bear":7,"giraffe":7,"horse":7,"bird":7,"duck":7,"bunny":7,"butterfly":7,"penguin":7,"student":7,
+
+"professor":7,"monster":7,"hero":7,"sailor":7,"lawyer":7,"customer":7,"scientist":7,"princess":7,"president":7,"cow":7,"crocodile":7,"goose":7,"hen":7,"deer":7,"donkey":7,"bee":7,"fly":7,"kitty":7,"tiger":7,"wolf":7,"zebra":7,"mother":7,"father":7,"patient":7,"manager":7,"director":7,"king":7,"queen":7,"kid":7,"fish":7,"moose":7,"pig":7,"pony":7,"puppy":7,"sheep":7,"squirrel":7,
+
+"lamb":7,"turkey":7,"turtle":7,"doctor":7,"pupil":7,"prince":7,"driver":7,"consumer":7,"writer":7,"farmer":7,"friend":7,"judge":7,"visitor":7,"guest":7,"servant":7,"chief":7,"citizen":7,"champion":7,"prisoner":7,"captain":7,"soldier":7,"passenger":7,"tenant":7,"politician":7,"resident":7,"buyer":7,"spokesman":7,"governor":7,
+"guard":7,"creature":7,"coach":7,"producer":7,
+
+"researcher":7,"guy":7,"dealer":7,"duke":7,"tourist":7,"landlord":7,"human":7,"host":7,"priest":7,"journalist":7,"poet":7,"hedgehog":7,"shark":7,"cockroach":7,"cobra":7,"hippo":7,"cake":7,"donut":7,"cookie":7,"box":7,"rose":7,"drink":7,"raisin":7,"melon":7,"sandwich":7,"strawberry":7,"ball":7,"balloon":7,"bat":7,"block":7,"book":7,"crayon":7,"chalk":7,"doll":7,
+
+"game":7,"glue":7,"lollipop":7,"hamburger":7,"banana":7,"biscuit":7,"muffin":7,"pancake":7,"pizza":7,"potato":7,"pretzel":7,"pumpkin":7,"sweetcorn":7,"yogurt":7,"pickle":7,"jigsaw":7,"pen":7,"pencil":7,"present":7,"toy":7,"cracker":7,"brush":7,"radio":7,"cloud":7,"mandarin":7,"hat":7,"basket":7,"plant":7,"flower":7,"chair":7,"spoon":7,
+"pillow":7,"gumball":7,"scarf":7,"shoe":7,"jacket":7,"hammer":7,"bucket":7,"knife":7,"cup":7,"plate":7,"towel":7,"bottle":7,"bowl":7,"can":7,"clock":7,"jar":7,"penny":7,
+
+"purse":7,"soap":7,"toothbrush":7,"watch":7,"newspaper":7,"fig":7,"bag":7,
+"wine":7,"key":7,"weapon":7,"brain":7,"tool":7,"crown":7,"ring":7,"leaf":7,"fruit":7,"mirror":7,"beer":7,"shirt":7,"guitar":7,"chemical":7,"seed":7,"shell":7,"brick":7,"bell":7,"coin":7,"button":7,"needle":7,"molecule":7,"crystal":7,"flag":7,"nail":7,"bean":7,"liver":7,"table":7,"stage":7,"bed":7,"stool":7,"road":7,"tree":7,
+
+"surface":7,"seat":7,"speaker":7,"computer":7,"rock":7,"boat":7,"cabinet":7,"tv":7,"TV":7,"desk":7,"bench":7,"shelf":7,"cloth":7,"piano":7,"bible":7,"leaflet":7,"sheet":7,"cupboard":7,"truck":7,"tray":7,"notebook":7,"blanket":7,"deck":7,"coffin":7,"log":7,"ladder":7,"barrel":7,"rug":7,"canvas":7,"throne":7,"booklet":7,"sock":7,"corpse":7,"sofa":7,"keyboard":7,"pad":7,"train":7,"couch":7,"bike":7,"pedestal":7,"platter":7,"paper":7,"rack":7,"board":7,"panel":7,"tripod":7,"branch":7,"machine":7,"floor":7,"napkin":7,"cot":7,"device":7,"yacht":7,"mattress":7,"stand":7,"stack":7,"windowsill":7,"counter":7,"cushion":7,"hanger":7,"trampoline":7,"gravel":7,"carpet":7,"plaque":7,
+"boulder":7,"mound":7,"bun":7,"dish":7,"podium":7,"tabletop":7,"beach":7,"glacier":7,"crack":7,"vessel":7,"futon":7,"turntable":7,"rag":7,"chessboard":7,"house":7,"room":7,"car":7,"garden":7,"glass":7,"vehicle":7,"hole":7,"storage":7,"pot":7,"pit":7,"tin":7,"envelope":7,"nest":7,"bush":7,"drawer":7,"container":7,"basin":7,"tent":7,"soup":7,"well":7,"cage":7,"sink":7,"cylinder":7,"parcel":7,"cart":7,"sack":7,"trunk":7,"wardrobe":7,"bin":7,"fridge":7,"mug":7,"corner":7,"pool":7,"blender":7,"closet":7,"pile":7,"van":7,
+
+"trailer":7,"saucepan":7,"taxi":7,"haystack":7,"dumpster":7,"puddle":7,"bathtub":7,"pod":7,"tub":7,"trap":7,
+"microwave":7,"bookstore":7,"package":7,"cafe":7,"castle":7,"bunker":7,"vase":7,"backpack":7,"tube":7,"hammock":7,"stadium":7,"backyard":7,"swamp":7,"refrigerator":7,"palace":7,"cubicle":7,"crib":7,"condo":7,"tower":7,"crate":7,"dungeon":7,"teapot":7,"tomb":7,"casket":7,"jeep":7,"shoebox":7,"wagon":7,"bakery":7,"fishbowl":7,"kennel":7,"china":7,
+"spaceship":7,"penthouse":7,"pyramid":7,"painting":7,"lamp":7,"sword":7,"sculpture":7,"rod":7,"sphere":7,"surgeon":7,"poster":7,"giant":7,"trophy":7,"hedge":7,"helicopter":7,"statue":7,"skull":7,"beast":7,"lemon":7,"whale":7,"fox":7,"trainee":7,"dragon":7,"monk":7,"headmaster":7,"philosopher":7,"foreigner":7,"worm":7,"chemist":7,"torch":7,"valve":7,"genius":7,"baron":7,"murderer":7,"bicycle":7,"pepper":7,"warrior":7,"pillar":7,"cassette":7,"broker":7,
+"Emma":8,"Liam":8,"Olivia":8,"Noah":8,"Ava":8,"William":8,"Isabella":8,"James":8,"Sophia":8,"Oliver":8,
+"Charlotte":8,"Benjamin":8,"Mia":8,"Elijah":8,"Amelia":8,"Lucas":8,"Harper":8,"Mason":8,"Evelyn":8,"Logan":8,
+"Abigail":8,"Alexander":8,"Emily":8,"Ethan":8,"Elizabeth":8,"Jacob":8,"Mila":8,"Michael":8,"Ella":8,
+"Daniel":8,"Avery":8,"Henry":8,"Sofia":8,"Jackson":8,"Camila":8,"Sebastian":8,"Aria":8,"Aiden":8,
+"Scarlett":8,"Matthew":8,"Victoria":8,"Samuel":8,"Madison":8,"David":8,"Luna":8,"Joseph":8,"Grace":8,
+"Carter":8,"Chloe":8,"Owen":8,"Penelope":8,"Wyatt":8,"Layla":8,"John":8,"Riley":8,"Jack":8,"Zoey":8,
+"Luke":8,"Nora":8,"Jayden":8,"Lily":8,"Dylan":8,"Eleanor":8,"Grayson":8,"Hannah":8,"Levi":8,"Lillian":8,
+"Isaac":8,"Addison":8,"Gabriel":8,"Aubrey":8,"Julian":8,"Ellie":8,"Mateo":8,"Stella":8,"Anthony":8,
+"Natalie":8,"Jaxon":8,"Zoe":8,"Lincoln":8,"Leah":8,"Joshua":8,"Hazel":8,"Christopher":8,"Violet":8,
+"Andrew":8,"Aurora":8,"Theodore":8,"Savannah":8,"Caleb":8,"Audrey":8,"Ryan":8,"Brooklyn":8,"Asher":8,
+"Bella":8,"Nathan":8,"Claire":8,"Thomas":8,"Skylar":8,"Leo":8,"Lina":8,"Paula":8,"Charlie":8,
+"admired":0,"adored":0,"appreciated":0,"ate":0,"attempted":0,"awarded":0,"baked":0,"believed":0,"blessed":0,"broke":0,"broken":0,"brought":0,"burned":0,"call":0,"called":0,"changed":0,"clean":0,"cleaned":0,"collapsed":0,"confessed":0,"cook":0,"cooked":0,"craved":0,
+
+"crawl":0,"cried":0,"crumpled":0,"dance":0,"danced":0,"declared":0,"decomposed":0,"discovered":0,"disintegrated":0,"doubled":0,"drawn":0,"dreamed":0,"drew":0,
+"dust":0,"dusted":0,"eat":0,"eaten":0,"enjoyed":0,"enlarged":0,"examined":0,"expected":0,"fed":0,"floated":0,"forwarded":0,"found":0,"frowned":0,"froze":0,"frozen":0,"gasped":0,"gave":0,"giggle":0,"giggled":0,"given":0,"grew":0,"grown":0,"handed":0,"hated":0,"heard":0,"held":0,"helped":0,"hoped":0,"hunt":0,"hunted":0,"imagined":0,"improved":0,"inflated":0,"intended":0,"investigate":0,"investigated":0,"itched":0,"jog":0,"jogged":0,"juggled":0,"knew":0,"known":0,"laughed":0,"lended":0,"liked":0,"loaned":0,
+
+"longed":0,"loved":0,"mailed":0,"meant":0,"missed":0,"nap":0,"napped":0,"needed":0,"noticed":0,"nursed":0,"observed":0,"offered":0,"packed":0,"paint":0,"painted":0,"passed":0,"pierced":0,"planned":0,"poked":0,"posted":0,"preferred":0,"promised":0,"proved":0,"ran":0,
+
+"read":0,"reddened":0,"rented":0,"respected":0,"returned":0,"rolled":0,"run":0,"said":0,"saw":0,"scoffed":0,"screamed":0,"seen":0,"sent":0,"served":0,"shattered":0,"shipped":0,"shortened":0,"sketch":0,"sketched":0,"sleep":0,
+"slept":0,"slid":0,"slipped":0,"smiled":0,"smirk":0,"smirked":0,"snapped":0,"sneeze":0,"sneezed":0,"snoozed":0,"snored":0,"sold":0,"split":0,"squeezed":0,"stabbed":0,"studied":0,"stuttered":0,"supported":0,"talk":0,"talked":0,"teleported":0,"thought":0,"threw":0,"thrown":0,"tolerated":0,"tossed":0,"touched":0,"tried":0,"valued":0,"walk":0,"walked":0,"wanted":0,"wired":0,"wished":0,"worshipped":0,"yearned":0,"|":0,"(":0,")":0,"x":0,"_":0,".":0,"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":0,
+
+"31":0,"32":0,"33":0,"34":0,"35":0,"36":0,"37":0,"38":0,"39":0,"40":0,"41":0,"42":0,"43":0,"44":0,"45":0,"46":0,"47":0,"48":0,"49":0,"50":0,"51":0,"52":0,"53":0,"54":0,"55":0,"56":0,"57":0,"58":0,"59":0,"60":0,"61":0,"62":0,"63":0,"64":0,"65":0,"66":0,"67":0,"68":0,"69":0,"70":0,"71":0,"72":0,"73":0,"74":0,"75":0,"76":0,"77":0,"78":0,"79":0,"80":0,"81":0,
+"82":0,"83":0,"84":0,"85":0,"86":0,"87":0,"88":0,"89":0,"90":0,"91":0,"92":0,"93":0,"94":0,"95":0,"96":0,"97":0,"98":0,"99":0,"100":0,"101":0,"102":0,"103":0,
+
+"104":0,"105":0,"106":0,"107":0,"108":0,"109":0,"110":0,"111":0,"112":0,"113":0,"114":0,"115":0,"116":0,"117":0,"118":0,"119":0,"120":0,"121":0,"122":0,"123":0,"124":0,"125":0,"126":0,"127":0,"128":0,";":0,"agent":0,"theme":0,"recipient":0,"xcomp":0,"ccomp":0,",":0,"AND":0,"*":0,"draw":0,"nurse":0,"juggle":0,"bake":0,"like":0,"know":0,"help":0,"see":0,"find":0,"hear":0,
+
+"notice":0,"love":0,"admire":0,"adore":0,"appreciate":0,"miss":0,"respect":0,"tolerate":0,"value":0,"worship":0,"observe":0,"discover":0,"hold":0,"stab":0,"touch":0,"pierce":0,"poke":0,"hope":0,"say":0,"believe":0,"confess":0,"declare":0,"prove":0,"think":0,"support":0,"wish":0,"dream":0,"expect":0,"imagine":0,"want":0,"prefer":0,"need":0,"intend":0,"try":0,"attempt":0,"plan":0,"crave":0,"hate":0,"enjoy":0,"roll":0,
+"freeze":0,"burn":0,"shorten":0,"float":0,"grow":0,"slide":0,"break":0,"crumple":0,"change":0,"snap":0,"collapse":0,
+"decompose":0,"double":0,"improve":0,"inflate":0,"enlarge":0,"redden":0,"disintegrate":0,"smile":0,"laugh":0,"cry":0,"snooze":0,"scream":0,"stutter":0,"frown":0,"scoff":0,"snore":0,"gasp":0,"give":0,"lend":0,"sell":0,"offer":0,"feed":0,"pass":0,"rent":0,"serve":0,"award":0,"promise":0,"bring":0,"send":0,"hand":0,"forward":0,"mail":0,
+
+"post":0,"ship":0,"pack":0,"study":0,"examine":0,"throw":0,"toss":0,"mean":0,"long":0,"yearn":0,"itch":0,"loan":0,"return":0,"slip":0,"wire":0,"shatter":0,"squeeze":0,"teleport":0,"bless":0,"":0,0:0,"nmod":0, ".":0,"unknown":7};
+def word_level_token_to_part_of_speech_index_non_verbs(word_token) {
+
+  # verbs are zero in this map but all words must have an entry
+  return word_token_to_part_of_speech_map[word_token];
+}
+
+# verb map 1: v_trans_omissible, v_trans_not_omissible, v_unacc, v_unerg, v_inf, v_dat
+# 9, 11, 15, 16, 17, 18
+word_token_to_part_of_speech_map_verbs_1 = {
+# all non-verbs should be zero here as adding this to the others
+"The":0,"the":0,"A":0,"a":0,"on":0,"in":0,"beside":0,"was":0,"by":0,"to":0,"that":0,"girl":0,"boy":0,"cat":0,"dog":0,"baby":0,"child":0,"teacher":0,"frog":0,"chicken":0,"mouse":0,"lion":0,"monkey":0,"bear":0,"giraffe":0,"horse":0,"bird":0,"duck":0,"bunny":0,"butterfly":0,"penguin":0,"student":0,"professor":0,"monster":0,"hero":0,"sailor":0,"lawyer":0,"customer":0,"scientist":0,"princess":0,"president":0,"cow":0,"crocodile":0,"goose":0,"hen":0,"deer":0,"donkey":0,"bee":0,"fly":0,"kitty":0,"tiger":0,"wolf":0,"zebra":0,"mother":0,"father":0,"patient":0,"manager":0,"director":0,"king":0,"queen":0,"kid":0,"fish":0,"moose":0,"pig":0,"pony":0,"puppy":0,"sheep":0,"squirrel":0,"lamb":0,"turkey":0,"turtle":0,"doctor":0,"pupil":0,"prince":0,"driver":0,"consumer":0,"writer":0,"farmer":0,"friend":0,"judge":0,
+"visitor":0,"guest":0,"servant":0,"chief":0,"citizen":0,"champion":0,"prisoner":0,"captain":0,"soldier":0,"passenger":0,"tenant":0,"politician":0,"resident":0,"buyer":0,"spokesman":0,"governor":0,
+"guard":0,"creature":0,"coach":0,"producer":0,"researcher":0,"guy":0,"dealer":0,"duke":0,"tourist":0,"landlord":0,"human":0,"host":0,"priest":0,"journalist":0,"poet":0,"hedgehog":0,"shark":0,"cockroach":0,"cobra":0,"hippo":0,"cake":0,"donut":0,"cookie":0,"box":0,"rose":0,"drink":0,"raisin":0,"melon":0,"sandwich":0,"strawberry":0,"ball":0,"balloon":0,"bat":0,"block":0,"book":0,"crayon":0,"chalk":0,"doll":0,"game":0,"glue":0,"lollipop":0,"hamburger":0,"banana":0,"biscuit":0,"muffin":0,"pancake":0,"pizza":0,"potato":0,"pretzel":0,"pumpkin":0,"sweetcorn":0,"yogurt":0,"pickle":0,"jigsaw":0,"pen":0,"pencil":0,"present":0,"toy":0,"cracker":0,"brush":0,"radio":0,"cloud":0,"mandarin":0,"hat":0,"basket":0,"plant":0,"flower":0,"chair":0,"spoon":0,"pillow":0,"gumball":0,"scarf":0,"shoe":0,"jacket":0,"hammer":0,"bucket":0,"knife":0,"cup":0,"plate":0,"towel":0,"bottle":0,"bowl":0,"can":0,"clock":0,"jar":0,"penny":0,"purse":0,"soap":0,"toothbrush":0,"watch":0,"newspaper":0,"fig":0,"bag":0,"wine":0,
+"key":0,"weapon":0,"brain":0,"tool":0,"crown":0,"ring":0,"leaf":0,"fruit":0,"mirror":0,"beer":0,"shirt":0,"guitar":0,"chemical":0,"seed":0,"shell":0,"brick":0,"bell":0,"coin":0,"button":0,"needle":0,"molecule":0,"crystal":0,"flag":0,"nail":0,"bean":0,"liver":0,"table":0,"stage":0,"bed":0,"stool":0,"road":0,"tree":0,"surface":0,"seat":0,"speaker":0,"computer":0,"rock":0,"boat":0,"cabinet":0,"TV":0,"tv":0,"desk":0,"bench":0,"shelf":0,"cloth":0,"piano":0,"bible":0,"leaflet":0,"sheet":0,"cupboard":0,"truck":0,"tray":0,"notebook":0,"blanket":0,"deck":0,"coffin":0,"log":0,"ladder":0,"barrel":0,"rug":0,"canvas":0,"throne":0,"booklet":0,"sock":0,"corpse":0,"sofa":0,"keyboard":0,"pad":0,"train":0,"couch":0,"bike":0,"pedestal":0,"platter":0,"paper":0,"rack":0,"board":0,"panel":0,"tripod":0,"branch":0,"machine":0,"floor":0,"napkin":0,"cot":0,"device":0,"yacht":0,"mattress":0,"stand":0,"stack":0,"windowsill":0,"counter":0,"cushion":0,"hanger":0,"trampoline":0,"gravel":0,"carpet":0,"plaque":0,
+"boulder":0,"mound":0,"bun":0,"dish":0,"podium":0,"tabletop":0,"beach":0,"glacier":0,"crack":0,"vessel":0,"futon":0,"turntable":0,"rag":0,"chessboard":0,"house":0,"room":0,"car":0,"garden":0,"glass":0,"vehicle":0,"hole":0,"storage":0,"pot":0,"pit":0,"tin":0,"envelope":0,"nest":0,"bush":0,"drawer":0,"container":0,"basin":0,"tent":0,"soup":0,"well":0,"cage":0,"sink":0,"cylinder":0,"parcel":0,"cart":0,"sack":0,"trunk":0,"wardrobe":0,"bin":0,"fridge":0,"mug":0,"corner":0,"pool":0,"blender":0,"closet":0,"pile":0,"van":0,"trailer":0,"saucepan":0,"taxi":0,"haystack":0,"dumpster":0,"puddle":0,"bathtub":0,"pod":0,"tub":0,"trap":0,"microwave":0,"bookstore":0,"package":0,"cafe":0,"castle":0,"bunker":0,"vase":0,"backpack":0,"tube":0,"hammock":0,"stadium":0,"backyard":0,"swamp":0,"refrigerator":0,"palace":0,"cubicle":0,"crib":0,"condo":0,"tower":0,"crate":0,"dungeon":0,"teapot":0,"tomb":0,"casket":0,"jeep":0,"shoebox":0,"wagon":0,"bakery":0,"fishbowl":0,"kennel":0,"china":0,
+"spaceship":0,"penthouse":0,"pyramid":0,"painting":0,"lamp":0,"sword":0,"sculpture":0,"rod":0,"sphere":0,"surgeon":0,"poster":0,"giant":0,"trophy":0,"hedge":0,"helicopter":0,"statue":0,"skull":0,"beast":0,"lemon":0,"whale":0,"fox":0,"trainee":0,"dragon":0,"monk":0,"headmaster":0,"philosopher":0,"foreigner":0,"worm":0,
+"chemist":0,"torch":0,"valve":0,"genius":0,"baron":0,"murderer":0,"bicycle":0,"pepper":0,"warrior":0,"pillar":0,"cassette":0,"broker":0,
+"Emma":0,"Liam":0,"Olivia":0,"Noah":0,"Ava":0,"William":0,"Isabella":0,"James":0,"Sophia":0,"Oliver":0,
+"Charlotte":0,"Benjamin":0,"Mia":0,"Elijah":0,"Amelia":0,"Lucas":0,"Harper":0,"Mason":0,"Evelyn":0,"Logan":0,
+"Abigail":0,"Alexander":0,"Emily":0,"Ethan":0,"Elizabeth":0,"Jacob":0,"Mila":0,"Michael":0,"Ella":0,
+"Daniel":0,"Avery":0,"Henry":0,"Sofia":0,"Jackson":0,"Camila":0,"Sebastian":0,"Aria":0,"Aiden":0,
+"Scarlett":0,"Matthew":0,"Victoria":0,"Samuel":0,"Madison":0,"David":0,"Luna":0,"Joseph":0,"Grace":0,
+"Carter":0,"Chloe":0,"Owen":0,"Penelope":0,"Wyatt":0,"Layla":0,"John":0,"Riley":0,"Jack":0,"Zoey":0,
+"Luke":0,"Nora":0,"Jayden":0,"Lily":0,"Dylan":0,"Eleanor":0,"Grayson":0,"Hannah":0,"Levi":0,"Lillian":0,
+"Isaac":0,"Addison":0,"Gabriel":0,"Aubrey":0,"Julian":0,"Ellie":0,"Mateo":0,"Stella":0,"Anthony":0,
+"Natalie":0,"Jaxon":0,"Zoe":0,"Lincoln":0,"Leah":0,"Joshua":0,"Hazel":0,"Christopher":0,"Violet":0,
+"Andrew":0,"Aurora":0,"Theodore":0,"Savannah":0,"Caleb":0,"Audrey":0,"Ryan":0,"Brooklyn":0,"Asher":0,
+"Bella":0,"Nathan":0,"Claire":0,"Thomas":0,"Skylar":0,"Leo":0,"Lina":0,"Paula":0,"Charlie":0,
+"ate":9,"painted":9,"drew":9,"cleaned":9,"cooked":9,"dusted":9,"hunted":9,"nursed":9,"sketched":9,"juggled":9,"called":9,"heard":9,"packed":9,"saw":9,"noticed":9,"studied":9,"examined":9,"observed":9,"knew":9,"investigated":9,"baked":9,"eaten":0,"drawn":0,"seen":0,"known":0,"liked":11,"helped":11,"found":11,"loved":11,"poked":11,"admired":11,"adored":11,"appreciated":11,"missed":11,"respected":11,"threw":11,
+"tolerated":11,"valued":11,"worshipped":11,"discovered":11,"held":11,"stabbed":11,"touched":11,"pierced":11,"tossed":11,"thrown":0,"hoped":0,"said":0,"believed":0,"confessed":0,"declared":0,"proved":0,"thought":0,"supported":0,"wished":0,"dreamed":0,"expected":0,"imagined":0,"meant":0,"wanted":0,"preferred":0,"needed":0,"intended":0,"tried":0,"attempted":0,"planned":0,"craved":0,"hated":0,"enjoyed":0,"longed":0,"yearned":0,"itched":0,"rolled":15,"froze":15,"burned":15,
+"shortened":15,"floated":15,"grew":15,"slid":15,"broke":15,"crumpled":15,"split":15,"changed":15,"snapped":15,"disintegrated":15,"collapsed":15,"decomposed":15,"doubled":15,"improved":15,"inflated":15,"enlarged":15,"reddened":15,"shattered":15,"blessed":15,"squeezed":15,"slept":16,"smiled":16,"laughed":16,"sneezed":16,"cried":16,"talked":16,"danced":16,"jogged":16,"walked":16,"ran":16,"napped":16,"snoozed":16,"screamed":16,"stuttered":16,"frowned":16,"giggled":16,"scoffed":16,"snored":16,"smirked":16,"gasped":16,
+"walk":17,"run":17,"sleep":17,"sneeze":17,"nap":17,"eat":17,"read":17,"cook":17,"hunt":17,"paint":17,"talk":17,"dance":17,"giggle":17,"jog":17,"smirk":17,"call":17,"sketch":17,"dust":17,"clean":17,"investigate":17,"crawl":17,"gave":18,"lended":18,"sold":18,"offered":18,"fed":18,"passed":18,"sent":18,"rented":18,"served":18,"awarded":18,"brought":18,"handed":18,"forwarded":18,"promised":18,"mailed":18,"loaned":18,"posted":18,"returned":18,"slipped":18,"wired":18,"teleported":18,"shipped":18,"given":0,"frozen":0,"grown":0,"broken":0,"|":0,"(":0,")":0,"x":0,"_":0,".":0,"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":0,"31":0,"32":0,"33":0,"34":0,"35":0,"36":0,"37":0,"38":0,"39":0,"40":0,"41":0,"42":0,"43":0,"44":0,"45":0,"46":0,"47":0,"48":0,"49":0,"50":0,"51":0,"52":0,"53":0,"54":0,"55":0,"56":0,"57":0,"58":0,"59":0,"60":0,"61":0,"62":0,"63":0,"64":0,
+"65":0,"66":0,"67":0,"68":0,"69":0,"70":0,"71":0,"72":0,"73":0,"74":0,"75":0,"76":0,"77":0,"78":0,"79":0,"80":0,"81":0,"82":0,"83":0,"84":0,"85":0,"86":0,"87":0,"88":0,"89":0,"90":0,"91":0,"92":0,"93":0,"94":0,"95":0,"96":0,"97":0,"98":0,"99":0,"100":0,"101":0,"102":0,"103":0,"104":0,"105":0,"106":0,"107":0,"108":0,"109":0,"110":0,"111":0,"112":0,"113":0,"114":0,"115":0,"116":0,"117":0,"118":0,"119":0,"120":0,"121":0,"122":0,"123":0,"124":0,"125":0,"126":0,"127":0,"128":0,";":0,"agent":0,"theme":0,"recipient":0,"xcomp":0,"ccomp":0,",":0,"AND":0,"*":0,"draw":21,"nurse":21,"juggle":21,"bake":21,"like":21,"know":21,"help":21,"see":21,"find":21,"hear":21,"notice":21,"love":21,"admire":21,"adore":21,"appreciate":21,"miss":21,"respect":21,"tolerate":21,"value":21,"worship":21,
+"observe":21,"discover":21,"hold":21,"stab":21,"touch":21,"pierce":21,"poke":21,"hope":21,"say":21,"believe":21,"confess":21,"declare":21,"prove":21,"think":21,
+"support":21,"wish":21,"dream":21,"expect":21,"imagine":21,"want":21,"prefer":21,"need":21,"intend":21,"try":21,"attempt":21,"plan":21,"crave":21,"hate":21,"enjoy":21,"roll":21,"freeze":21,"burn":21,"shorten":21,"float":21,"grow":21,"slide":21,"break":21,"crumple":21,"change":21,"snap":21,"collapse":21,"decompose":21,"double":21,"improve":21,"inflate":21,"enlarge":21,"redden":21,"disintegrate":21,"smile":21,"laugh":21,"cry":21,"snooze":21,"scream":21,"stutter":21,"frown":21,"scoff":21,"snore":21,"gasp":21,"give":21,"lend":21,"sell":21,"offer":21,"feed":21,"pass":21,"rent":21,"serve":21,"award":21,"promise":21,"bring":21,"send":21,"hand":21,"forward":21,"mail":21,"post":21,"ship":21,"pack":21,"study":21,"examine":21,"throw":21,"toss":21,"mean":21,
+"long":21,"yearn":21,"itch":21,"loan":21,"return":21,"slip":21,"wire":21,"shatter":21,"squeeze":21,"teleport":21,"bless":21,
+"nmod":0,".":0,"unknown":0};
+def word_level_token_to_part_of_speech_verb_index_1(word_token) {
+
+  return word_token_to_part_of_speech_map_verbs_1[word_token];
+}
+
+# verb map 2: v_trans_omissible_pp, v_trans_not_omissible_pp, v_dat_pp, v_unacc_pp
+# this: 10, 12, [not 13, not 14], 19, 20
+#                ^^ liked is a member of multiple
+word_token_to_part_of_speech_map_verbs_2 = {"The":0,"the":0,"A":0,"a":0,"on":0,"in":0,"beside":0,"was":0,"by":0,"to":0,"that":0,"girl":0,"boy":0,"cat":0,"dog":0,"baby":0,"child":0,"teacher":0,"frog":0,"chicken":0,"mouse":0,"lion":0,"monkey":0,"bear":0,"giraffe":0,"horse":0,"bird":0,"duck":0,"bunny":0,"butterfly":0,"penguin":0,"student":0,"professor":0,"monster":0,"hero":0,"sailor":0,"lawyer":0,"customer":0,"scientist":0,"princess":0,"president":0,"cow":0,"crocodile":0,"goose":0,"hen":0,"deer":0,"donkey":0,"bee":0,"fly":0,"kitty":0,"tiger":0,"wolf":0,"zebra":0,"mother":0,"father":0,"patient":0,"manager":0,"director":0,"king":0,"queen":0,"kid":0,"fish":0,"moose":0,"pig":0,"pony":0,"puppy":0,"sheep":0,"squirrel":0,"lamb":0,"turkey":0,"turtle":0,"doctor":0,"pupil":0,"prince":0,"driver":0,"consumer":0,"writer":0,"farmer":0,"friend":0,"judge":0,"visitor":0,"guest":0,"servant":0,"chief":0,"citizen":0,"champion":0,"prisoner":0,"captain":0,"soldier":0,"passenger":0,"tenant":0,"politician":0,"resident":0,"buyer":0,"spokesman":0,"governor":0,
+"guard":0,"creature":0,"coach":0,"producer":0,"researcher":0,"guy":0,"dealer":0,"duke":0,"tourist":0,"landlord":0,"human":0,"host":0,"priest":0,"journalist":0,"poet":0,"hedgehog":0,"shark":0,"cockroach":0,"cobra":0,"hippo":0,"cake":0,"donut":0,"cookie":0,"box":0,"rose":0,"drink":0,"raisin":0,"melon":0,"sandwich":0,"strawberry":0,"ball":0,"balloon":0,"bat":0,"block":0,"book":0,"crayon":0,"chalk":0,"doll":0,"game":0,"glue":0,"lollipop":0,"hamburger":0,"banana":0,"biscuit":0,"muffin":0,"pancake":0,"pizza":0,"potato":0,"pretzel":0,"pumpkin":0,"sweetcorn":0,"yogurt":0,"pickle":0,"jigsaw":0,"pen":0,"pencil":0,"present":0,"toy":0,"cracker":0,"brush":0,"radio":0,"cloud":0,"mandarin":0,"hat":0,"basket":0,"plant":0,"flower":0,"chair":0,"spoon":0,"pillow":0,"gumball":0,"scarf":0,"shoe":0,"jacket":0,"hammer":0,"bucket":0,"knife":0,"cup":0,"plate":0,"towel":0,"bottle":0,"bowl":0,"can":0,"clock":0,"jar":0,"penny":0,"purse":0,"soap":0,"toothbrush":0,"watch":0,"newspaper":0,"fig":0,"bag":0,
+"wine":0,"key":0,"weapon":0,"brain":0,"tool":0,"crown":0,"ring":0,"leaf":0,"fruit":0,"mirror":0,"beer":0,"shirt":0,"guitar":0,"chemical":0,"seed":0,"shell":0,"brick":0,"bell":0,"coin":0,"button":0,"needle":0,"molecule":0,"crystal":0,"flag":0,"nail":0,"bean":0,"liver":0,"table":0,"stage":0,"bed":0,"stool":0,"road":0,"tree":0,"surface":0,"seat":0,"speaker":0,"computer":0,"rock":0,"boat":0,"cabinet":0,"TV":0,"tv":0,"desk":0,"bench":0,"shelf":0,"cloth":0,"piano":0,"bible":0,"leaflet":0,"sheet":0,"cupboard":0,"truck":0,"tray":0,"notebook":0,"blanket":0,"deck":0,"coffin":0,"log":0,"ladder":0,"barrel":0,"rug":0,"canvas":0,"throne":0,"booklet":0,"sock":0,"corpse":0,"sofa":0,"keyboard":0,"pad":0,"train":0,"couch":0,"bike":0,"pedestal":0,"platter":0,"paper":0,"rack":0,"board":0,"panel":0,"tripod":0,"branch":0,"machine":0,"floor":0,"napkin":0,"cot":0,"device":0,"yacht":0,"mattress":0,"stand":0,"stack":0,"windowsill":0,"counter":0,"cushion":0,"hanger":0,"trampoline":0,"gravel":0,"carpet":0,"plaque":0,
+"boulder":0,"mound":0,"bun":0,"dish":0,"podium":0,"tabletop":0,"beach":0,"glacier":0,"crack":0,"vessel":0,"futon":0,"turntable":0,"rag":0,"chessboard":0,"house":0,"room":0,"car":0,"garden":0,"glass":0,"vehicle":0,"hole":0,"storage":0,"pot":0,"pit":0,"tin":0,"envelope":0,"nest":0,"bush":0,"drawer":0,"container":0,"basin":0,"tent":0,"soup":0,"well":0,"cage":0,"sink":0,"cylinder":0,"parcel":0,"cart":0,"sack":0,"trunk":0,"wardrobe":0,"bin":0,"fridge":0,"mug":0,"corner":0,"pool":0,"blender":0,"closet":0,"pile":0,"van":0,"trailer":0,"saucepan":0,"taxi":0,"haystack":0,"dumpster":0,"puddle":0,"bathtub":0,"pod":0,"tub":0,"trap":0,"microwave":0,"bookstore":0,"package":0,"cafe":0,"castle":0,"bunker":0,"vase":0,"backpack":0,"tube":0,"hammock":0,"stadium":0,"backyard":0,"swamp":0,"refrigerator":0,"palace":0,"cubicle":0,"crib":0,"condo":0,"tower":0,"crate":0,"dungeon":0,"teapot":0,"tomb":0,"casket":0,"jeep":0,"shoebox":0,"wagon":0,"bakery":0,"fishbowl":0,"kennel":0,"china":0,
+"spaceship":0,"penthouse":0,"pyramid":0,"painting":0,"lamp":0,"sword":0,"sculpture":0,"rod":0,"sphere":0,"surgeon":0,"poster":0,"giant":0,"trophy":0,"hedge":0,"helicopter":0,"statue":0,"skull":0,"beast":0,"lemon":0,"whale":0,"fox":0,"trainee":0,"dragon":0,"monk":0,"headmaster":0,"philosopher":0,"foreigner":0,"worm":0,"chemist":0,"torch":0,"valve":0,"genius":0,"baron":0,"murderer":0,"bicycle":0,"pepper":0,"warrior":0,"pillar":0,"cassette":0,"broker":0,
+"Emma":0,"Liam":0,"Olivia":0,"Noah":0,"Ava":0,"William":0,"Isabella":0,"James":0,"Sophia":0,"Oliver":0,
+"Charlotte":0,"Benjamin":0,"Mia":0,"Elijah":0,"Amelia":0,"Lucas":0,"Harper":0,"Mason":0,"Evelyn":0,"Logan":0,
+"Abigail":0,"Alexander":0,"Emily":0,"Ethan":0,"Elizabeth":0,"Jacob":0,"Mila":0,"Michael":0,"Ella":0,
+"Daniel":0,"Avery":0,"Henry":0,"Sofia":0,"Jackson":0,"Camila":0,"Sebastian":0,"Aria":0,"Aiden":0,
+"Scarlett":0,"Matthew":0,"Victoria":0,"Samuel":0,"Madison":0,"David":0,"Luna":0,"Joseph":0,"Grace":0,
+"Carter":0,"Chloe":0,"Owen":0,"Penelope":0,"Wyatt":0,"Layla":0,"John":0,"Riley":0,"Jack":0,"Zoey":0,
+"Luke":0,"Nora":0,"Jayden":0,"Lily":0,"Dylan":0,"Eleanor":0,"Grayson":0,"Hannah":0,"Levi":0,"Lillian":0,
+"Isaac":0,"Addison":0,"Gabriel":0,"Aubrey":0,"Julian":0,"Ellie":0,"Mateo":0,"Stella":0,"Anthony":0,
+"Natalie":0,"Jaxon":0,"Zoe":0,"Lincoln":0,"Leah":0,"Joshua":0,"Hazel":0,"Christopher":0,"Violet":0,
+"Andrew":0,"Aurora":0,"Theodore":0,"Savannah":0,"Caleb":0,"Audrey":0,"Ryan":0,"Brooklyn":0,"Asher":0,
+"Bella":0,"Nathan":0,"Claire":0,"Thomas":0,"Skylar":0,"Leo":0,"Lina":0,"Paula":0,"Charlie":0,
+"ate":0,"drew":0,"heard":10,"saw":0,"knew":0,"baked":0,"eaten":10,"painted":10,"drawn":10,"cleaned":10,"cooked":10,"dusted":10,"hunted":10,"nursed":10,"sketched":10,"juggled":10,"called":10,"packed":10,"seen":10,"noticed":10,"studied":10,"examined":10,"observed":10,"known":10,"investigated":10,"helped":12,"threw":0,"held":12,"liked":12,"found":12,"loved":12,"poked":12,"admired":12,"adored":12,"appreciated":12,
+"missed":12,"respected":12,"thrown":12,"tolerated":12,"valued":12,"worshipped":12,"discovered":12,"stabbed":12,"touched":12,"pierced":12,"tossed":12,"hoped":0,"said":0,"believed":0,"confessed":0,"declared":0,"proved":0,"thought":0,"supported":0,"wished":0,"dreamed":0,"expected":0,"imagined":0,"wanted":0,"preferred":0,"needed":0,"intended":0,"tried":0,"attempted":0,"planned":0,"craved":0,"hated":0,"enjoyed":0,"meant":0,"longed":0,"yearned":0,"itched":0,"grew":0,"split":20,"slept":0,"smiled":0,"laughed":0,"sneezed":0,"cried":0,"talked":0,"danced":0,"jogged":0,"ran":0,"napped":0,"snoozed":0,"screamed":0,"stuttered":0,"frowned":0,"scoffed":0,"snored":0,"smirked":0,"gasped":0,"walk":0,"run":0,"sleep":0,"sneeze":0,"nap":0,"eat":0,"read":0,"cook":0,"hunt":0,"paint":0,"talk":0,"dance":0,"giggle":0,"jog":0,"smirk":0,"call":0,"sketch":0,"dust":0,"clean":0,"investigate":0,"crawl":0,"gave":0,"fed":19,"teleported":0,"shipped":0,"given":19,"lended":19,"sold":19,"offered":19,"passed":19,"sent":19,
+"rented":19,"served":19,"awarded":19,"brought":19,"handed":19,"forwarded":19,"promised":19,"mailed":19,"loaned":19,"posted":19,"returned":19,"slipped":19,"wired":19,"rolled":20,"frozen":20,"burned":20,"shortened":20,"floated":20,"grown":20,"slid":20,"broken":20,"crumpled":20,"changed":20,"snapped":20,"disintegrated":20,"collapsed":20,"decomposed":20,"doubled":20,"improved":20,"inflated":20,"enlarged":20,"reddened":20,"shattered":20,"blessed":20,"squeezed":20,"|":0,"(":0,")":0,"x":0,"_":0,".":0,"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":0,"31":0,"32":0,"33":0,"34":0,"35":0,"36":0,"37":0,"38":0,"39":0,"40":0,"41":0,"42":0,"43":0,"44":0,"45":0,"46":0,"47":0,"48":0,"49":0,"50":0,"51":0,"52":0,"53":0,"54":0,"55":0,"56":0,"57":0,"58":0,"59":0,"60":0,"61":0,"62":0,"63":0,"64":0,"65":0,"66":0,"67":0,"68":0,"69":0,"70":0,"71":0,"72":0,"73":0,"74":0,
+"75":0,"76":0,"77":0,"78":0,"79":0,"80":0,"81":0,"82":0,"83":0,"84":0,"85":0,"86":0,"87":0,"88":0,"89":0,"90":0,"91":0,"92":0,"93":0,"94":0,"95":0,"96":0,"97":0,"98":0,"99":0,"100":0,"101":0,"102":0,"103":0,"104":0,"105":0,"106":0,"107":0,"108":0,"109":0,"110":0,"111":0,"112":0,"113":0,"114":0,"115":0,"116":0,"117":0,"118":0,"119":0,"120":0,"121":0,"122":0,"123":0,"124":0,"125":0,"126":0,"127":0,"128":0,";":0,"agent":0,"theme":0,"recipient":0,"xcomp":0,"ccomp":0,",":0,"AND":0,"*":0,"draw":0,"nurse":0,"juggle":0,"bake":0,
+"like":0,"know":0,"help":0,"see":0,"find":0,"hear":0,"notice":0,"love":0,"admire":0,"adore":0,"appreciate":0,"miss":0,"respect":0,"tolerate":0,"value":0,"worship":0,"observe":0,"discover":0,"hold":0,"stab":0,"touch":0,"pierce":0,"poke":0,"hope":0,"say":0,"believe":0,"confess":0,"declare":0,"prove":0,"think":0,"support":0,"wish":0,"dream":0,"expect":0,"imagine":0,"want":0,"prefer":0,"need":0,"intend":0,"try":0,"attempt":0,"plan":0,"crave":0,"hate":0,"enjoy":0,"roll":0,"freeze":0,"burn":0,"shorten":0,"float":0,"grow":0,"slide":0,"break":0,"crumple":0,"change":0,"snap":0,"collapse":0,"decompose":0,"double":0,"improve":0,"inflate":0,"enlarge":0,"redden":0,"disintegrate":0,"smile":0,"laugh":0,"cry":0,"snooze":0,"scream":0,"stutter":0,"frown":0,"scoff":0,"snore":0,"gasp":0,"give":0,"lend":0,"sell":0,"offer":0,"feed":0,"pass":0,"rent":0,"serve":0,"award":0,"promise":0,"bring":0,"send":0,"hand":0,"forward":0,"mail":0,
+"post":0,"ship":0,"pack":0,"study":0,"examine":0,"throw":0,"toss":0,"mean":0,"long":0,"yearn":0,"itch":0,"loan":0,"return":0,"slip":0,"wire":0,"shatter":0,"squeeze":0,"teleport":0,"bless":0,"":0,0:0,"giggled":0,"froze":0,"broke":0,"walked":0,"nmod":0,".":0,"unknown":0};
+def word_level_token_to_part_of_speech_verb_index_2(word_token) {
+
+ return word_token_to_part_of_speech_map_verbs_2[word_token];
+}
+
+# v_cp_taking (13)
+word_token_to_part_of_speech_map_verbs_3 = {
+# all non-verbs should be zero here as adding this to the others
+"The":0,"the":0,"A":0,"a":0,"on":0,"in":0,"beside":0,"was":0,"by":0,"to":0,"that":0,"girl":0,"boy":0,
+"cat":0,"dog":0,"baby":0,"child":0,"teacher":0,"frog":0,"chicken":0,"mouse":0,"lion":0,"monkey":0,
+"bear":0,"giraffe":0,"horse":0,"bird":0,"duck":0,"bunny":0,"butterfly":0,"penguin":0,"student":0,
+"professor":0,"monster":0,"hero":0,"sailor":0,"lawyer":0,"customer":0,"scientist":0,"princess":0,
+"president":0,"cow":0,"crocodile":0,"goose":0,"hen":0,"deer":0,"donkey":0,"bee":0,"fly":0,"kitty":0,
+"tiger":0,"wolf":0,"zebra":0,"mother":0,"father":0,"patient":0,"manager":0,"director":0,"king":0,
+"queen":0,"kid":0,"fish":0,"moose":0,"pig":0,"pony":0,"puppy":0,"sheep":0,"squirrel":0,"lamb":0,
+"turkey":0,"turtle":0,"doctor":0,"pupil":0,"prince":0,"driver":0,"consumer":0,"writer":0,"farmer":0,
+"friend":0,"judge":0,"visitor":0,"guest":0,"servant":0,"chief":0,"citizen":0,"champion":0,
+"prisoner":0,"captain":0,"soldier":0,"passenger":0,"tenant":0,"politician":0,"resident":0,"buyer":0,"spokesman":0,"governor":0,
+"guard":0,"creature":0,"coach":0,"producer":0,"researcher":0,"guy":0,"dealer":0,"duke":0,
+"tourist":0,"landlord":0,"human":0,"host":0,"priest":0,"journalist":0,"poet":0,"hedgehog":0,
+"shark":0,"cockroach":0,"cobra":0,"hippo":0,"cake":0,"donut":0,"cookie":0,"box":0,"rose":0,"drink":0,
+"raisin":0,"melon":0,"sandwich":0,"strawberry":0,"ball":0,"balloon":0,"bat":0,"block":0,"book":0,
+"crayon":0,"chalk":0,"doll":0,"game":0,"glue":0,"lollipop":0,"hamburger":0,"banana":0,"biscuit":0,
+"muffin":0,"pancake":0,"pizza":0,"potato":0,"pretzel":0,"pumpkin":0,"sweetcorn":0,"yogurt":0,
+"pickle":0,"jigsaw":0,"pen":0,"pencil":0,"present":0,"toy":0,"cracker":0,"brush":0,"radio":0,"cloud":0,"mandarin":0,"hat":0,"basket":0,"plant":0,"flower":0,"chair":0,"spoon":0,"pillow":0,"gumball":0,"scarf":0,"shoe":0,"jacket":0,"hammer":0,"bucket":0,"knife":0,"cup":0,"plate":0,"towel":0,"bottle":0,"bowl":0,"can":0,"clock":0,"jar":0,"penny":0,"purse":0,"soap":0,"toothbrush":0,"watch":0,"newspaper":0,"fig":0,"bag":0,"wine":0,
+"key":0,"weapon":0,"brain":0,"tool":0,"crown":0,"ring":0,"leaf":0,"fruit":0,"mirror":0,"beer":0,"shirt":0,"guitar":0,"chemical":0,"seed":0,"shell":0,"brick":0,"bell":0,"coin":0,"button":0,"needle":0,"molecule":0,"crystal":0,"flag":0,"nail":0,"bean":0,"liver":0,"table":0,"stage":0,"bed":0,"stool":0,"road":0,"tree":0,"surface":0,"seat":0,"speaker":0,"computer":0,"rock":0,"boat":0,"cabinet":0,"TV":0,"tv":0,"desk":0,"bench":0,"shelf":0,"cloth":0,"piano":0,"bible":0,"leaflet":0,"sheet":0,"cupboard":0,"truck":0,"tray":0,"notebook":0,"blanket":0,"deck":0,"coffin":0,"log":0,"ladder":0,"barrel":0,"rug":0,"canvas":0,"throne":0,"booklet":0,"sock":0,"corpse":0,"sofa":0,"keyboard":0,"pad":0,"train":0,"couch":0,"bike":0,"pedestal":0,"platter":0,"paper":0,"rack":0,"board":0,"panel":0,"tripod":0,"branch":0,"machine":0,"floor":0,"napkin":0,"cot":0,"device":0,"yacht":0,"mattress":0,"stand":0,"stack":0,"windowsill":0,"counter":0,"cushion":0,"hanger":0,"trampoline":0,"gravel":0,"carpet":0,"plaque":0,"boulder":0,
+"mound":0,"bun":0,"dish":0,"podium":0,"tabletop":0,"beach":0,"glacier":0,"crack":0,"vessel":0,"futon":0,"turntable":0,"rag":0,"chessboard":0,"house":0,"room":0,"car":0,"garden":0,"glass":0,"vehicle":0,"hole":0,"storage":0,"pot":0,"pit":0,"tin":0,"envelope":0,"nest":0,"bush":0,"drawer":0,"container":0,"basin":0,"tent":0,"soup":0,"well":0,"cage":0,"sink":0,"cylinder":0,"parcel":0,"cart":0,"sack":0,"trunk":0,"wardrobe":0,"bin":0,"fridge":0,"mug":0,"corner":0,"pool":0,"blender":0,"closet":0,"pile":0,"van":0,"trailer":0,"saucepan":0,"taxi":0,"haystack":0,"dumpster":0,"puddle":0,"bathtub":0,"pod":0,"tub":0,"trap":0,"microwave":0,"bookstore":0,"package":0,"cafe":0,"castle":0,"bunker":0,"vase":0,"backpack":0,"tube":0,"hammock":0,"stadium":0,"backyard":0,"swamp":0,"refrigerator":0,"palace":0,"cubicle":0,"crib":0,"condo":0,"tower":0,"crate":0,"dungeon":0,"teapot":0,"tomb":0,"casket":0,"jeep":0,"shoebox":0,"wagon":0,"bakery":0,"fishbowl":0,"kennel":0,"china":0,"spaceship":0,
+"penthouse":0,"pyramid":0,"painting":0,"lamp":0,"sword":0,"sculpture":0,"rod":0,"sphere":0,"surgeon":0,"poster":0,"giant":0,"trophy":0,"hedge":0,"helicopter":0,"statue":0,"skull":0,"beast":0,"lemon":0,"whale":0,"fox":0,"trainee":0,"dragon":0,"monk":0,"headmaster":0,"philosopher":0,"foreigner":0,"worm":0,"chemist":0,"torch":0,"valve":0,"genius":0,"baron":0,"murderer":0,"bicycle":0,"pepper":0,"warrior":0,"pillar":0,"cassette":0,"broker":0,
+"Emma":0,"Liam":0,"Olivia":0,"Noah":0,"Ava":0,"William":0,"Isabella":0,"James":0,"Sophia":0,"Oliver":0,
+"Charlotte":0,"Benjamin":0,"Mia":0,"Elijah":0,"Amelia":0,"Lucas":0,"Harper":0,"Mason":0,"Evelyn":0,"Logan":0,
+"Abigail":0,"Alexander":0,"Emily":0,"Ethan":0,"Elizabeth":0,"Jacob":0,"Mila":0,"Michael":0,"Ella":0,
+"Daniel":0,"Avery":0,"Henry":0,"Sofia":0,"Jackson":0,"Camila":0,"Sebastian":0,"Aria":0,"Aiden":0,
+"Scarlett":0,"Matthew":0,"Victoria":0,"Samuel":0,"Madison":0,"David":0,"Luna":0,"Joseph":0,"Grace":0,
+"Carter":0,"Chloe":0,"Owen":0,"Penelope":0,"Wyatt":0,"Layla":0,"John":0,"Riley":0,"Jack":0,"Zoey":0,
+"Luke":0,"Nora":0,"Jayden":0,"Lily":0,"Dylan":0,"Eleanor":0,"Grayson":0,"Hannah":0,"Levi":0,"Lillian":0,
+"Isaac":0,"Addison":0,"Gabriel":0,"Aubrey":0,"Julian":0,"Ellie":0,"Mateo":0,"Stella":0,"Anthony":0,
+"Natalie":0,"Jaxon":0,"Zoe":0,"Lincoln":0,"Leah":0,"Joshua":0,"Hazel":0,"Christopher":0,"Violet":0,
+"Andrew":0,"Aurora":0,"Theodore":0,"Savannah":0,"Caleb":0,"Audrey":0,"Ryan":0,"Brooklyn":0,"Asher":0,
+"Bella":0,"Nathan":0,"Claire":0,"Thomas":0,"Skylar":0,"Leo":0,"Lina":0,"Paula":0,"Charlie":0,
+"admired":13,"adored":0,"appreciated":13,"ate":0,"attempted":0,"awarded":0,"baked":0,"believed":13,"blessed":0,"broke":0,"broken":0,"brought":0,"burned":0,"call":0,"called":0,"changed":0,"clean":0,"cleaned":0,"collapsed":0,"confessed":13,"cook":0,"cooked":0,"craved":0,"crawl":0,"cried":0,"crumpled":0,"dance":0,"danced":0,"declared":13,"decomposed":0,"discovered":0,"disintegrated":0,"doubled":0,"drawn":0,"dreamed":13,"drew":0,
+"dust":0,"dusted":0,"eat":0,"eaten":0,"enjoyed":0,"enlarged":0,"examined":0,"expected":13,"fed":0,"floated":0,"forwarded":0,"found":0,"frowned":0,"froze":0,"frozen":0,"gasped":0,"gave":0,"giggle":0,"giggled":0,"given":0,"grew":0,"grown":0,"handed":0,"hated":0,"heard":0,"held":0,"helped":0,"hoped":13,"hunt":0,"hunted":0,"imagined":13,"improved":0,"inflated":0,"intended":0,"investigate":0,"investigated":0,"itched":0,"jog":0,"jogged":0,"juggled":0,"knew":0,"known":0,"laughed":0,"lended":0,"liked":13,"loaned":0,"longed":0,"loved":0,"mailed":0,"meant":13,"missed":0,"nap":0,"napped":0,"needed":0,"noticed":13,"nursed":0,"observed":0,"offered":0,"packed":0,"paint":0,"painted":0,"passed":0,"pierced":0,"planned":0,"poked":0,"posted":0,"preferred":0,"promised":0,"proved":13,"ran":0,"read":0,"reddened":0,"rented":0,"respected":13,"returned":0,"rolled":0,"run":0,"said":13,"saw":0,"scoffed":0,"screamed":0,"seen":0,"sent":0,"served":0,"shattered":0,"shipped":0,"shortened":0,"sketch":0,"sketched":0,
+"sleep":0,"slept":0,"slid":0,"slipped":0,"smiled":0,"smirk":0,"smirked":0,"snapped":0,"sneeze":0,"sneezed":0,"snoozed":0,"snored":0,"sold":0,"split":0,"squeezed":0,"stabbed":0,"studied":0,"stuttered":0,"supported":13,"talk":0,"talked":0,"teleported":0,"thought":13,"threw":0,"thrown":0,"tolerated":13,"tossed":0,"touched":0,"tried":0,"valued":13,"walk":0,"walked":0,"wanted":0,"wired":0,"wished":13,"worshipped":0,"yearned":0,"|":0,"(":0,")":0,"x":0,"_":0,".":0,"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":0,"31":0,"32":0,"33":0,"34":0,"35":0,"36":0,"37":0,"38":0,"39":0,"40":0,"41":0,"42":0,"43":0,"44":0,"45":0,"46":0,"47":0,"48":0,"49":0,"50":0,"51":0,"52":0,"53":0,"54":0,"55":0,"56":0,"57":0,"58":0,"59":0,"60":0,"61":0,"62":0,"63":0,"64":0,"65":0,"66":0,"67":0,"68":0,"69":0,"70":0,"71":0,"72":0,"73":0,"74":0,"75":0,"76":0,"77":0,"78":0,"79":0,
+"80":0,"81":0,"82":0,"83":0,"84":0,"85":0,"86":0,"87":0,"88":0,"89":0,"90":0,"91":0,"92":0,"93":0,"94":0,"95":0,"96":0,"97":0,"98":0,"99":0,"100":0,"101":0,"102":0,"103":0,"104":0,"105":0,"106":0,"107":0,"108":0,"109":0,"110":0,"111":0,"112":0,"113":0,"114":0,"115":0,"116":0,"117":0,"118":0,"119":0,"120":0,"121":0,"122":0,"123":0,"124":0,"125":0,"126":0,"127":0,"128":0,";":0,"agent":0,"theme":0,"recipient":0,"xcomp":0,"ccomp":0,",":0,"AND":0,"*":0,"draw":0,"nurse":0,"juggle":0,"bake":0,"like":0,"know":0,"help":0,"see":0,
+"find":0,"hear":0,"notice":0,"love":0,"admire":0,"adore":0,"appreciate":0,"miss":0,"respect":0,"tolerate":0,"value":0,"worship":0,"observe":0,"discover":0,"hold":0,"stab":0,"touch":0,"pierce":0,"poke":0,"hope":0,"say":0,"believe":0,"confess":0,"declare":0,"prove":0,"think":0,"support":0,"wish":0,"dream":0,"expect":0,"imagine":0,"want":0,"prefer":0,"need":0,"intend":0,"try":0,"attempt":0,"plan":0,"crave":0,"hate":0,"enjoy":0,"roll":0,"freeze":0,"burn":0,"shorten":0,"float":0,"grow":0,"slide":0,"break":0,"crumple":0,"change":0,"snap":0,"collapse":0,"decompose":0,"double":0,"improve":0,"inflate":0,"enlarge":0,"redden":0,"disintegrate":0,"smile":0,"laugh":0,"cry":0,"snooze":0,"scream":0,"stutter":0,"frown":0,"scoff":0,"snore":0,"gasp":0,"give":0,"lend":0,"sell":0,"offer":0,"feed":0,"pass":0,"rent":0,"serve":0,"award":0,"promise":0,"bring":0,"send":0,"hand":0,"forward":0,"mail":0,"post":0,"ship":0,"pack":0,"study":0,"examine":0,"throw":0,"toss":0,"mean":0,"long":0,"yearn":0,"itch":0,"loan":0,"return":0,"slip":0,"wire":0,"shatter":0,"squeeze":0,"teleport":0,"bless":0,"":0,0:0,
+"nmod":0,".":0,"unknown":0};
+def word_level_token_to_part_of_speech_verb_index_3(word_token) {
+
+  return word_token_to_part_of_speech_map_verbs_3[word_token];
+}
+
+# v_inf_taking (14)
+word_token_to_part_of_speech_map_verbs_4 = {
+    # all non-verbs should be zero here as adding this to the others
+"The":0,"the":0,"A":0,"a":0,"on":0,"in":0,"beside":0,"was":0,"by":0,"to":0,"that":0,"girl":0,"boy":0,"cat":0,"dog":0,"baby":0,"child":0,"teacher":0,"frog":0,"chicken":0,"mouse":0,"lion":0,"monkey":0,"bear":0,"giraffe":0,"horse":0,"bird":0,"duck":0,"bunny":0,"butterfly":0,"penguin":0,"student":0,"professor":0,"monster":0,"hero":0,"sailor":0,"lawyer":0,"customer":0,"scientist":0,"princess":0,"president":0,"cow":0,"crocodile":0,"goose":0,"hen":0,"deer":0,"donkey":0,"bee":0,"fly":0,"kitty":0,"tiger":0,"wolf":0,"zebra":0,"mother":0,"father":0,"patient":0,"manager":0,"director":0,"king":0,"queen":0,"kid":0,"fish":0,"moose":0,"pig":0,"pony":0,"puppy":0,"sheep":0,"squirrel":0,"lamb":0,"turkey":0,"turtle":0,"doctor":0,"pupil":0,"prince":0,"driver":0,"consumer":0,"writer":0,"farmer":0,"friend":0,"judge":0,
+"visitor":0,"guest":0,"servant":0,"chief":0,"citizen":0,"champion":0,"prisoner":0,"captain":0,"soldier":0,
+"passenger":0,"tenant":0,"politician":0,"resident":0,"buyer":0,"spokesman":0,"governor":0,"guard":0,"creature":0,"coach":0,"producer":0,"researcher":0,"guy":0,"dealer":0,"duke":0,"tourist":0,"landlord":0,"human":0,"host":0,"priest":0,"journalist":0,"poet":0,"hedgehog":0,"shark":0,"cockroach":0,"cobra":0,"hippo":0,"cake":0,"donut":0,"cookie":0,"box":0,"rose":0,"drink":0,"raisin":0,"melon":0,"sandwich":0,"strawberry":0,"ball":0,"balloon":0,"bat":0,"block":0,"book":0,"crayon":0,"chalk":0,"doll":0,"game":0,"glue":0,"lollipop":0,"hamburger":0,"banana":0,"biscuit":0,"muffin":0,"pancake":0,"pizza":0,"potato":0,"pretzel":0,"pumpkin":0,"sweetcorn":0,"yogurt":0,"pickle":0,"jigsaw":0,"pen":0,"pencil":0,"present":0,"toy":0,"cracker":0,"brush":0,"radio":0,"cloud":0,"mandarin":0,"hat":0,"basket":0,"plant":0,"flower":0,"chair":0,"spoon":0,"pillow":0,"gumball":0,"scarf":0,"shoe":0,"jacket":0,"hammer":0,"bucket":0,
+"knife":0,"cup":0,"plate":0,"towel":0,"bottle":0,"bowl":0,"can":0,"clock":0,"jar":0,"penny":0,"purse":0,"soap":0,"toothbrush":0,"watch":0,"newspaper":0,"fig":0,"bag":0,"wine":0,"key":0,"weapon":0,"brain":0,"tool":0,"crown":0,"ring":0,"leaf":0,"fruit":0,"mirror":0,"beer":0,"shirt":0,"guitar":0,"chemical":0,"seed":0,"shell":0,"brick":0,"bell":0,"coin":0,"button":0,"needle":0,"molecule":0,"crystal":0,"flag":0,"nail":0,"bean":0,"liver":0,"table":0,"stage":0,"bed":0,"stool":0,"road":0,"tree":0,"surface":0,"seat":0,"speaker":0,"computer":0,"rock":0,"boat":0,"cabinet":0,"TV":0,"tv":0,"desk":0,"bench":0,"shelf":0,"cloth":0,"piano":0,"bible":0,"leaflet":0,"sheet":0,"cupboard":0,"truck":0,"tray":0,"notebook":0,"blanket":0,"deck":0,"coffin":0,"log":0,"ladder":0,"barrel":0,"rug":0,"canvas":0,"throne":0,"booklet":0,"sock":0,"corpse":0,"sofa":0,"keyboard":0,"pad":0,"train":0,"couch":0,"bike":0,"pedestal":0,
+"platter":0,"paper":0,"rack":0,"board":0,"panel":0,"tripod":0,"branch":0,"machine":0,"floor":0,"napkin":0,"cot":0,"device":0,"yacht":0,"mattress":0,"stand":0,"stack":0,"windowsill":0,"counter":0,"cushion":0,"hanger":0,"trampoline":0,"gravel":0,"carpet":0,"plaque":0,"boulder":0,"mound":0,"bun":0,"dish":0,"podium":0,"tabletop":0,"beach":0,"glacier":0,"crack":0,"vessel":0,"futon":0,"turntable":0,"rag":0,"chessboard":0,"house":0,"room":0,"car":0,"garden":0,"glass":0,"vehicle":0,"hole":0,"storage":0,"pot":0,"pit":0,"tin":0,"envelope":0,"nest":0,"bush":0,"drawer":0,"container":0,"basin":0,"tent":0,"soup":0,"well":0,"cage":0,"sink":0,"cylinder":0,"parcel":0,"cart":0,"sack":0,"trunk":0,"wardrobe":0,"bin":0,"fridge":0,"mug":0,"corner":0,"pool":0,"blender":0,"closet":0,"pile":0,"van":0,"trailer":0,"saucepan":0,"taxi":0,"haystack":0,"dumpster":0,"puddle":0,"bathtub":0,"pod":0,"tub":0,"trap":0,"microwave":0,
+"bookstore":0,"package":0,"cafe":0,"castle":0,"bunker":0,"vase":0,"backpack":0,"tube":0,"hammock":0,"stadium":0,"backyard":0,"swamp":0,"refrigerator":0,"palace":0,"cubicle":0,"crib":0,"condo":0,"tower":0,"crate":0,"dungeon":0,"teapot":0,"tomb":0,"casket":0,"jeep":0,"shoebox":0,"wagon":0,"bakery":0,"fishbowl":0,"kennel":0,"china":0,"spaceship":0,"penthouse":0,"pyramid":0,"painting":0,"lamp":0,
+"sword":0,"sculpture":0,"rod":0,"sphere":0,"surgeon":0,"poster":0,"giant":0,"trophy":0,"hedge":0,"helicopter":0,"statue":0,"skull":0,"beast":0,"lemon":0,"whale":0,"fox":0,"trainee":0,"dragon":0,"monk":0,"headmaster":0,"philosopher":0,"foreigner":0,"worm":0,"chemist":0,"torch":0,"valve":0,"genius":0,"baron":0,"murderer":0,"bicycle":0,"pepper":0,"warrior":0,"pillar":0,"cassette":0,"broker":0,
+"Emma":0,"Liam":0,"Olivia":0,"Noah":0,"Ava":0,"William":0,"Isabella":0,"James":0,"Sophia":0,"Oliver":0,
+"Charlotte":0,"Benjamin":0,"Mia":0,"Elijah":0,"Amelia":0,"Lucas":0,"Harper":0,"Mason":0,"Evelyn":0,"Logan":0,
+"Abigail":0,"Alexander":0,"Emily":0,"Ethan":0,"Elizabeth":0,"Jacob":0,"Mila":0,"Michael":0,"Ella":0,
+"Daniel":0,"Avery":0,"Henry":0,"Sofia":0,"Jackson":0,"Camila":0,"Sebastian":0,"Aria":0,"Aiden":0,
+"Scarlett":0,"Matthew":0,"Victoria":0,"Samuel":0,"Madison":0,"David":0,"Luna":0,"Joseph":0,"Grace":0,
+"Carter":0,"Chloe":0,"Owen":0,"Penelope":0,"Wyatt":0,"Layla":0,"John":0,"Riley":0,"Jack":0,"Zoey":0,
+"Luke":0,"Nora":0,"Jayden":0,"Lily":0,"Dylan":0,"Eleanor":0,"Grayson":0,"Hannah":0,"Levi":0,"Lillian":0,
+"Isaac":0,"Addison":0,"Gabriel":0,"Aubrey":0,"Julian":0,"Ellie":0,"Mateo":0,"Stella":0,"Anthony":0,
+"Natalie":0,"Jaxon":0,"Zoe":0,"Lincoln":0,"Leah":0,"Joshua":0,"Hazel":0,"Christopher":0,"Violet":0,
+"Andrew":0,"Aurora":0,"Theodore":0,"Savannah":0,"Caleb":0,"Audrey":0,"Ryan":0,"Brooklyn":0,"Asher":0,
+"Bella":0,"Nathan":0,"Claire":0,"Thomas":0,"Skylar":0,"Leo":0,"Lina":0,"Paula":0,"Charlie":0,
+"admired":0,
+"adored":0,"appreciated":0,"ate":0,"attempted":14,"awarded":0,"baked":0,"believed":0,"blessed":0,"broke":0,"brought":0,"burned":0,"call":0,"called":0,"changed":0,"clean":0,"cleaned":0,"collapsed":0,"confessed":0,"cook":0,"cooked":0,"craved":14,"crawl":0,"cried":0,"crumpled":0,"dance":0,"danced":0,"declared":0,"decomposed":0,"discovered":0,"disintegrated":0,"doubled":0,"drawn":0,"dreamed":14,"drew":0,"dust":0,"dusted":0,"eat":0,"eaten":0,"enjoyed":14,"enlarged":0,"examined":0,"expected":14,"fed":0,"floated":0,"forwarded":0,"found":0,"frowned":0,"froze":0,"frozen":0,"gasped":0,"gave":0,"giggle":0,"giggled":0,"given":0,"grew":0,"grown":0,"handed":0,"hated":14,"heard":0,"held":0,"helped":0,"hoped":14,"hunt":0,"hunted":0,"imagined":0,"improved":0,"inflated":0,"intended":14,"investigate":0,"investigated":0,
+"itched":14,"jog":0,"jogged":0,"juggled":0,"knew":0,"known":0,"laughed":0,"lended":0,"liked":14,"loaned":0,"longed":14,"loved":14,"mailed":0,"meant":14,"missed":0,"nap":0,"napped":0,"needed":14,"noticed":0,"nursed":0,"observed":0,"offered":0,"packed":0,"paint":0,"painted":0,"passed":0,"pierced":0,"planned":14,"poked":0,"posted":0,
+"preferred":14,"promised":0,"proved":0,"ran":0,"read":0,"reddened":0,"rented":0,"respected":0,"returned":0,"rolled":0,"run":0,"saw":0,"scoffed":0,"screamed":0,"seen":0,"sent":0,"served":0,"shattered":0,"shipped":0,"shortened":0,"sketch":0,"sketched":0,"sleep":0,"slept":0,"slid":0,"slipped":0,"smiled":0,"smirk":0,"smirked":0,"snapped":0,"sneeze":0,"sneezed":0,"snoozed":0,"snored":0,"sold":0,"split":0,"squeezed":0,"stabbed":0,"studied":0,"stuttered":0,"supported":0,"talk":0,"talked":0,"teleported":0,"thought":0,"threw":0,"thrown":0,"tolerated":0,"tossed":0,"touched":0,"tried":14,
+"valued":0,"walk":0,"walked":0,"wanted":14,"wired":0,"wished":14,"worshipped":0,"yearned":14,"|":0,"(":0,")":0,"x":0,"_":0,".":0,"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":0,"31":0,"32":0,"33":0,"34":0,"35":0,"36":0,"37":0,"38":0,"39":0,"40":0,"41":0,"42":0,"43":0,"44":0,"45":0,"46":0,"47":0,"48":0,"49":0,"50":0,"51":0,"52":0,"53":0,"54":0,
+"55":0,"56":0,"57":0,"58":0,"59":0,"60":0,"61":0,"62":0,"63":0,"64":0,"65":0,"66":0,"67":0,"68":0,"69":0,"70":0,"71":0,"72":0,"73":0,"74":0,"75":0,"76":0,"77":0,"78":0,"79":0,"80":0,"81":0,"82":0,"83":0,"84":0,"85":0,"86":0,"87":0,"88":0,"89":0,"90":0,"91":0,"92":0,"93":0,"94":0,"95":0,"96":0,"97":0,"98":0,"99":0,"100":0,"101":0,"102":0,"103":0,"104":0,"105":0,"106":0,"107":0,"108":0,"109":0,"110":0,"111":0,"112":0,"113":0,"114":0,"115":0,"116":0,"117":0,"118":0,"119":0,"120":0,"121":0,"122":0,"123":0,
+"124":0,"125":0,"126":0,"127":0,"128":0,";":0,"agent":0,"theme":0,"recipient":0,"xcomp":0,"ccomp":0,",":0,"AND":0,"*":0,"draw":0,"nurse":0,"juggle":0,"bake":0,"like":0,"know":0,"help":0,"see":0,"find":0,"hear":0,"notice":0,"love":0,"admire":0,"adore":0,"appreciate":0,"miss":0,"respect":0,"tolerate":0,"value":0,"worship":0,"observe":0,"discover":0,"hold":0,"stab":0,"touch":0,"pierce":0,"poke":0,"hope":0,"say":0,
+"believe":0,"confess":0,"declare":0,"prove":0,"think":0,"support":0,"wish":0,"dream":0,"expect":0,"imagine":0,"want":0,"prefer":0,"need":0,"intend":0,"try":0,"attempt":0,"plan":0,"crave":0,"hate":0,"enjoy":0,"roll":0,"freeze":0,"burn":0,"shorten":0,"float":0,"grow":0,"slide":0,"break":0,"crumple":0,"change":0,"snap":0,"collapse":0,"decompose":0,"double":0,"improve":0,"inflate":0,"enlarge":0,"redden":0,"disintegrate":0,"smile":0,
+"laugh":0,"cry":0,"snooze":0,"scream":0,"stutter":0,"frown":0,"scoff":0,"snore":0,"gasp":0,"give":0,"lend":0,"sell":0,"offer":0,"feed":0,"pass":0,"rent":0,"serve":0,"award":0,"promise":0,"bring":0,"send":0,"hand":0,"forward":0,"mail":0,"post":0,"ship":0,"pack":0,"study":0,"examine":0,"throw":0,"toss":0,"mean":0,"long":0,"yearn":0,"itch":0,"loan":0,"return":0,"slip":0,"wire":0,"shatter":0,"squeeze":0,
+"teleport":0,"bless":0,"":0,0:0,"broken":0,"said":0,
+"nmod":0,".":0,"in":0,"on":0,"beside":0,"unknown":0};
+def word_level_token_to_part_of_speech_verb_index_4(word_token) {
+
+  return word_token_to_part_of_speech_map_verbs_4[word_token];
+}
+nv_normalization_map = {"beside":"beside", "on":"on", "in":"in","ate": "eat", "painted": "paint", "drew": "draw", "cleaned": "clean", "cooked": "cook", "dusted": "dust", "hunted": "hunt", "nursed": "nurse", "sketched": "sketch", "juggled": "juggle", "called": "call", "eaten": "eat", "drawn": "draw", "baked": "bake", "liked": "like", "knew": "know", "helped": "help", "saw": "see", "found": "find", "heard": "hear", "noticed": "notice", "loved": "love", "admired": "admire", "adored": "adore", "appreciated": "appreciate", "missed": "miss", "respected": "respect", "tolerated": "tolerate", "valued": "value", "worshipped": "worship", "observed": "observe", "discovered": "discover", "held": "hold", "stabbed": "stab", "touched": "touch", "pierced": "pierce", "poked": "poke", "known": "know", "seen": "see", "hoped": "hope", "said": "say", "believed": "believe", "confessed": "confess", "declared": "declare", "proved": "prove", "thought": "think",
+"supported": "support", "wished": "wish", "dreamed": "dream", "expected": "expect", "imagined": "imagine", "wanted": "want", "preferred": "prefer", "needed": "need", "intended": "intend", "tried": "try", "attempted": "attempt", "planned": "plan", "craved": "crave", "hated": "hate", "enjoyed": "enjoy", "rolled": "roll", "froze": "freeze", "burned": "burn", "shortened": "shorten", "floated": "float", "grew": "grow", "slid": "slide", "broke": "break", "crumpled": "crumple", "split": "split", "changed": "change", "snapped": "snap", "collapsed": "collapse", "decomposed": "decompose", "doubled": "double", "improved": "improve", "inflated": "inflate", "enlarged": "enlarge", "reddened": "redden", "disintegrated": "disintegrate", "frozen": "freeze", "grown": "grow", "broken": "break", "slept": "sleep", "smiled": "smile", "laughed": "laugh",
+"sneezed": "sneeze", "cried": "cry", "talked": "talk", "danced": "dance", "jogged": "jog", "walked": "walk", "ran": "run", "napped": "nap", "snoozed": "snooze", "screamed": "scream", "stuttered": "stutter", "frowned": "frown", "giggled": "giggle", "scoffed": "scoff", "snored": "snore", "smirked": "smirk", "gasped": "gasp", "gave": "give", "lended": "lend", "sold": "sell", "offered": "offer", "fed": "feed", "passed": "pass", "rented": "rent", "served": "serve", "awarded": "award", "promised": "promise", "brought": "bring", "sent": "send", "handed": "hand", "forwarded": "forward", "mailed": "mail", "posted": "post", "given": "give", "shipped": "ship", "packed": "pack", "studied": "study", "examined": "examine", "investigated": "investigate", "thrown": "throw", "threw": "throw", "tossed": "toss", "meant": "mean", "longed": "long", "yearned": "yearn", "itched": "itch", "loaned": "loan", "returned": "return", "slipped": "slip", "wired": "wire",
+"shattered": "shatter", "squeezed": "squeeze", "teleported": "teleport", "blessed": "bless", "value": "value", "teleport": "teleport", "gasp": "gasp", "inflate": "inflate", "frown": "frown", "find": "find", "sneeze": "sneeze", "run": "run", "hand": "hand", "confess": "confess", "investigate": "investigate", "touch": "touch", "attempt": "attempt", "sleep": "sleep", "slide": "slide", "need": "need", "discover": "discover", "dream": "dream", "pierce": "pierce", "like": "like", "walk": "walk", "scoff": "scoff", "tolerate": "tolerate", "juggle": "juggle", "admire": "admire", "giggle": "giggle", "shorten": "shorten", "nurse": "nurse", "love": "love", "imagine": "imagine", "crawl": "crawl", "try": "try", "observe": "observe", "stutter": "stutter", "grow": "grow", "declare": "declare", "stab": "stab", "adore": "adore", "freeze": "freeze", "shatter": "shatter", "double": "double", "see": "see", "paint": "paint", "hate": "hate",
+"clean": "clean", "hear": "hear", "float": "float", "rent": "rent", "snore": "snore", "say": "say", "prove": "prove", "sell": "sell", "bless": "bless", "hope": "hope", "snap": "snap", "send": "send", "yearn": "yearn", "talk": "talk", "wire": "wire", "call": "call", "think": "think", "nap": "nap", "slip": "slip", "study": "study", "roll": "roll", "collapse": "collapse", "believe": "believe", "hunt": "hunt", "disintegrate": "disintegrate", "prefer": "prefer", "promise": "promise", "award": "award", "feed": "feed", "examine": "examine", "break": "break", "help": "help", "post": "post", "bake": "bake", "enjoy": "enjoy", "eat": "eat", "support": "support", "draw": "draw", "throw": "throw", "dust": "dust", "wish": "wish", "expect": "expect", "itch": "itch", "give": "give", "mean": "mean", "respect": "respect", "jog": "jog", "mail": "mail", "improve": "improve", "loan": "loan", "burn": "burn", "lend": "lend", "read": "read", "appreciate": "appreciate", "intend": "intend", "cry": "cry", "enlarge": "enlarge", "crumple": "crumple", "ship": "ship", "squeeze": "squeeze", "laugh": "laugh", "snooze": "snooze", "hold": "hold", "notice": "notice", "worship": "worship", "plan": "plan", "toss": "toss", "change": "change", "serve": "serve", "scream": "scream", "pack": "pack", "miss": "miss", "long": "long", "return": "return", "smile": "smile", "poke": "poke", "cook": "cook", "pass": "pass", "crave": "crave", "know": "know", "dance": "dance", "sketch": "sketch", "offer": "offer", "want": "want", "forward": "forward", "decompose": "decompose", "redden": "redden", "smirk": "smirk", "bring": "bring", "girl": "girl", "boy": "boy", "cat": "cat", "dog": "dog", "baby": "baby", "child": "child", "teacher": "teacher", "frog": "frog", "chicken": "chicken", "mouse": "mouse", "lion": "lion", "monkey": "monkey", "bear": "bear", "giraffe": "giraffe", "horse": "horse",
+"bird": "bird", "duck": "duck", "bunny": "bunny", "butterfly": "butterfly", "penguin": "penguin", "student": "student", "professor": "professor", "monster": "monster", "hero": "hero", "sailor": "sailor", "lawyer": "lawyer", "customer": "customer", "scientist": "scientist", "princess": "princess", "president": "president", "cow": "cow", "crocodile": "crocodile", "goose": "goose", "hen": "hen", "deer": "deer", "donkey": "donkey", "bee": "bee", "fly": "fly", "kitty": "kitty", "tiger": "tiger", "wolf": "wolf", "zebra": "zebra", "mother": "mother", "father": "father", "patient": "patient", "manager": "manager", "director": "director", "king": "king", "queen": "queen", "kid": "kid", "fish": "fish", "moose": "moose", "pig": "pig", "pony": "pony", "puppy": "puppy", "sheep": "sheep", "squirrel": "squirrel", "lamb": "lamb", "turkey": "turkey", "turtle": "turtle", "doctor": "doctor", "pupil": "pupil", "prince": "prince", "driver": "driver", "consumer": "consumer", "writer": "writer",
+"farmer": "farmer", "friend": "friend", "judge": "judge", "visitor": "visitor", "guest": "guest", "servant": "servant", "chief": "chief", "citizen": "citizen", "champion": "champion", "prisoner": "prisoner", "captain": "captain", "soldier": "soldier", "passenger": "passenger", "tenant": "tenant", "politician": "politician", "resident": "resident", "buyer": "buyer", "spokesman": "spokesman", "governor": "governor", "guard": "guard", "creature": "creature", "coach": "coach", "producer": "producer", "researcher": "researcher", "guy": "guy", "dealer": "dealer", "duke": "duke", "tourist": "tourist", "landlord": "landlord", "human": "human", "host": "host", "priest": "priest", "journalist": "journalist", "poet": "poet", "hedgehog": "hedgehog", "shark": "shark", "cockroach": "cockroach", "cobra": "cobra", "hippo": "hippo", "cake": "cake", "donut": "donut", "cookie": "cookie", "box": "box", "rose": "rose", "drink": "drink", "raisin": "raisin", "melon": "melon", "sandwich": "sandwich",
+"strawberry": "strawberry", "ball": "ball", "balloon": "balloon", "bat": "bat", "block": "block", "book": "book", "crayon": "crayon", "chalk": "chalk", "doll": "doll", "game": "game", "glue": "glue", "lollipop": "lollipop", "hamburger": "hamburger", "banana": "banana", "biscuit": "biscuit", "muffin": "muffin", "pancake": "pancake", "pizza": "pizza", "potato": "potato", "pretzel": "pretzel", "pumpkin": "pumpkin", "sweetcorn": "sweetcorn", "yogurt": "yogurt", "pickle": "pickle", "jigsaw": "jigsaw", "pen": "pen", "pencil": "pencil", "present": "present", "toy": "toy", "cracker": "cracker", "brush": "brush", "radio": "radio", "cloud": "cloud", "mandarin": "mandarin", "hat": "hat", "basket": "basket", "plant": "plant", "flower": "flower", "chair": "chair", "spoon": "spoon", "pillow": "pillow", "gumball": "gumball", "scarf": "scarf", "shoe": "shoe", "jacket": "jacket", "hammer": "hammer", "bucket": "bucket", "knife": "knife", "cup": "cup", "plate": "plate", "towel": "towel",
+"bottle": "bottle", "bowl": "bowl", "can": "can", "clock": "clock", "jar": "jar", "penny": "penny", "purse": "purse", "soap": "soap", "toothbrush": "toothbrush", "watch": "watch", "newspaper": "newspaper", "fig": "fig", "bag": "bag", "wine": "wine", "key": "key", "weapon": "weapon", "brain": "brain", "tool": "tool", "crown": "crown", "ring": "ring", "leaf": "leaf", "fruit": "fruit", "mirror": "mirror", "beer": "beer", "shirt": "shirt", "guitar": "guitar", "chemical": "chemical", "seed": "seed", "shell": "shell", "brick": "brick", "bell": "bell", "coin": "coin", "button": "button", "needle": "needle", "molecule": "molecule", "crystal": "crystal", "flag": "flag", "nail": "nail", "bean": "bean", "liver": "liver", 
+"Emma": "Emma", "Liam": "Liam", "Olivia": "Olivia", "Noah": "Noah", "Ava": "Ava", "William": "William", "Isabella": "Isabella", "James": "James", "Sophia": "Sophia", "Oliver": "Oliver", "Charlotte": "Charlotte", "Benjamin": "Benjamin", "Mia": "Mia", "Elijah": "Elijah",
+"Amelia": "Amelia", "Lucas": "Lucas", "Harper": "Harper", "Mason": "Mason", "Evelyn": "Evelyn", "Logan": "Logan", "Abigail": "Abigail", "Alexander": "Alexander", "Emily": "Emily", "Ethan": "Ethan", "Elizabeth": "Elizabeth", "Jacob": "Jacob", "Mila": "Mila", "Michael": "Michael", "Ella": "Ella", "Daniel": "Daniel", "Avery": "Avery", "Henry": "Henry", "Sofia": "Sofia", "Jackson": "Jackson", "Camila": "Camila", "Sebastian": "Sebastian", "Aria": "Aria", "Aiden": "Aiden", "Scarlett": "Scarlett", "Matthew": "Matthew", "Victoria": "Victoria", "Samuel": "Samuel", "Madison": "Madison", "David": "David", "Luna": "Luna", "Joseph": "Joseph", "Grace": "Grace", "Carter": "Carter", "Chloe": "Chloe", "Owen": "Owen", "Penelope": "Penelope", "Wyatt": "Wyatt", "Layla": "Layla", "John": "John", "Riley": "Riley", "Jack": "Jack", "Zoey": "Zoey", "Luke": "Luke", "Nora": "Nora", "Jayden": "Jayden", "Lily": "Lily", "Dylan": "Dylan", "Eleanor": "Eleanor", "Grayson": "Grayson", "Hannah": "Hannah",
+"Levi": "Levi", "Lillian": "Lillian", "Isaac": "Isaac", "Addison": "Addison", "Gabriel": "Gabriel", "Aubrey": "Aubrey", "Julian": "Julian", "Ellie": "Ellie", "Mateo": "Mateo", "Stella": "Stella", "Anthony": "Anthony", "Natalie": "Natalie", "Jaxon": "Jaxon", "Zoe": "Zoe", "Lincoln": "Lincoln", "Leah": "Leah", "Joshua": "Joshua", "Hazel": "Hazel", "Christopher": "Christopher", "Violet": "Violet", "Andrew": "Andrew", "Aurora": "Aurora", "Theodore": "Theodore", "Savannah": "Savannah", "Caleb": "Caleb", "Audrey": "Audrey", "Ryan": "Ryan", "Brooklyn": "Brooklyn", "Asher": "Asher", "Bella": "Bella", "Nathan": "Nathan", "Claire": "Claire", "Thomas": "Thomas", "Skylar": "Skylar", "Leo": "Leo", "Lina": "Lina", "Paula": "Paula", "Charlie": "Charlie", "table": "table", "stage": "stage", "bed": "bed", "stool": "stool", "road": "road", "tree": "tree", "surface": "surface", "seat": "seat", "speaker": "speaker", "computer": "computer", "rock": "rock", "boat": "boat", "cabinet": "cabinet","TV":"tv","tv": "tv",
+"desk": "desk", "bench": "bench", "shelf": "shelf", "cloth": "cloth", "piano": "piano", "bible": "bible", "leaflet": "leaflet", "sheet": "sheet", "cupboard": "cupboard", "truck": "truck", "tray": "tray", "notebook": "notebook", "blanket": "blanket", "deck": "deck", "coffin": "coffin", "log": "log", "ladder": "ladder", "barrel": "barrel", "rug": "rug", "canvas": "canvas", "throne": "throne", "booklet": "booklet", "sock": "sock", "corpse": "corpse", "sofa": "sofa", "keyboard": "keyboard", "pad": "pad", "train": "train", "couch": "couch", "bike": "bike", "pedestal": "pedestal", "platter": "platter", "paper": "paper", "rack": "rack", "board": "board", "panel": "panel", "tripod": "tripod", "branch": "branch", "machine": "machine", "floor": "floor", "napkin": "napkin", "cot": "cot", "device": "device", "yacht": "yacht", "mattress": "mattress", "stand": "stand", "stack": "stack", "windowsill": "windowsill", "counter": "counter", "cushion": "cushion", "hanger": "hanger",
+"trampoline": "trampoline", "gravel": "gravel", "carpet": "carpet", "plaque": "plaque", "boulder": "boulder", "mound": "mound", "bun": "bun", "dish": "dish", "podium": "podium", "tabletop": "tabletop", "beach": "beach", "glacier": "glacier", "crack": "crack", "vessel": "vessel", "futon": "futon", "turntable": "turntable", "rag": "rag", "chessboard": "chessboard", "house": "house", "room": "room", "car": "car", "garden": "garden", "glass": "glass", "vehicle": "vehicle", "hole": "hole", "storage": "storage", "pot": "pot", "pit": "pit", "tin": "tin", "envelope": "envelope", "nest": "nest", "bush": "bush", "drawer": "drawer", "container": "container", "basin": "basin", "tent": "tent", "soup": "soup", "well": "well", "cage": "cage", "sink": "sink", "cylinder": "cylinder", "parcel": "parcel", "cart": "cart", "sack": "sack", "trunk": "trunk", "wardrobe": "wardrobe", "bin": "bin", "fridge": "fridge", "mug": "mug", "corner": "corner", "pool": "pool", "blender": "blender", "closet": "closet",
+"pile": "pile", "van": "van", "trailer": "trailer", "saucepan": "saucepan", "taxi": "taxi", "haystack": "haystack", "dumpster": "dumpster", "puddle": "puddle", "bathtub": "bathtub", "pod": "pod", "tub": "tub", "trap": "trap", "microwave": "microwave", "bookstore": "bookstore", "package": "package", "cafe": "cafe", "castle": "castle", "bunker": "bunker", "vase": "vase", "backpack": "backpack", "tube": "tube", "hammock": "hammock", "stadium": "stadium", "backyard": "backyard", "swamp": "swamp", "refrigerator": "refrigerator", "palace": "palace", "cubicle": "cubicle", "crib": "crib", "condo": "condo", "tower": "tower", "crate": "crate", "dungeon": "dungeon", "teapot": "teapot", "tomb": "tomb", "casket": "casket", "jeep": "jeep", "shoebox": "shoebox", "wagon": "wagon", "bakery": "bakery", "fishbowl": "fishbowl", "kennel": "kennel", "china": "china", "spaceship": "spaceship", "penthouse": "penthouse", "pyramid": "pyramid", "painting": "painting", "lamp": "lamp",
+"sword": "sword", "sculpture": "sculpture", "rod": "rod", "sphere": "sphere", "surgeon": "surgeon", "poster": "poster", "giant": "giant", "trophy": "trophy", "hedge": "hedge", "helicopter": "helicopter", "statue": "statue", "skull": "skull", "beast": "beast", "lemon": "lemon", "whale": "whale", "fox": "fox", "trainee": "trainee", "dragon": "dragon", "monk": "monk", "headmaster": "headmaster", "philosopher": "philosopher", "foreigner": "foreigner", "worm": "worm", "chemist": "chemist", "torch": "torch", "valve": "valve", "genius": "genius", "baron": "baron", "murderer": "murderer", "bicycle": "bicycle", "pepper": "pepper", "warrior": "warrior", "pillar": "pillar", "cassette": "cassette", "broker": "broker", "nmod":"", ".":"","": "", 0: "",
+"unknown":"unknown"
+};
+
+def normalize_nv(nv) {
+
+return nv_normalization_map[nv];
+}
+
+input_section_idx = selector_width(select(tokens, "|", ==) and select(indices, indices, <=))*(0 if indicator(tokens == "|") else 1);
+INPUT_TYPE = 0;
+OUTPUT_TYPE = 1;
+
+pos_tokens = word_level_token_to_part_of_speech_index_non_verbs(tokens); # an embedding layer can learn this mapping
+# verb map 1: v_trans_omissible, v_trans_not_omissible, v_unacc, v_unerg, v_inf, v_dat
+# 9, 11, 15, 16, 17, 18
+pos_tokens_vmap1 = pos_tokens + word_level_token_to_part_of_speech_verb_index_1(tokens);
+# verb map 2: v_trans_omissible_pp, v_trans_not_omissible_pp, v_dat_pp, v_unacc_pp
+# 10, 12, [not 13, not 14], 19, 20
+pos_tokens_vmap2 = pos_tokens + word_level_token_to_part_of_speech_verb_index_2(tokens);
+# v_cp_taking (13)
+pos_tokens_vmap3 = pos_tokens + word_level_token_to_part_of_speech_verb_index_3(tokens);
+# v_inf_taking (14)
+pos_tokens_vmap4 = pos_tokens + word_level_token_to_part_of_speech_verb_index_4(tokens);
+
+# 1 on the noun in "the <noun>", zeroes
+DEFINITE_ARTICLE_NOUN_MASK = aggregate(select(7, pos_tokens, ==) and (select(tokens, "the", ==) or select(tokens, "The", ==)) and select(indices+1, indices, ==), 1);
+definite_article_noun_count = selector_width(select(DEFINITE_ARTICLE_NOUN_MASK, 1, ==));
+
+DEFINITE_ARTICLE_NOUN_INTRO_RANK = 1;
+NOUN_INTRO_RANK = 2; # excludes proper nouns in COGS
+VERB_INTRO_RANK = 2; # intentionally same as prior (nouns and verbs stay in their same order in COGS)
+OTHER_INTRO_RANK = 3; # not introduced
+
+# Introduce variables
+INPUT_MASK = indicator(input_section_idx==INPUT_TYPE);
+OUTPUT_MASK = indicator(input_section_idx==OUTPUT_TYPE);
+PROPER_NOUN_MASK = indicator(pos_tokens == 8)*INPUT_MASK;
+NOUN_TO_INTRODUCE_MASK = indicator(pos_tokens == 7)*INPUT_MASK; # proper nouns no longer introduced in COGS vs ReCOGS
+VERB_MASK = indicator(pos_tokens_vmap1 == 9 or pos_tokens_vmap2 == 10 or pos_tokens_vmap1 == 11 or pos_tokens_vmap2 == 12 or pos_tokens_vmap3 == 13 or pos_tokens_vmap4 == 14 or pos_tokens_vmap1 == 15 or pos_tokens_vmap1 == 16 or pos_tokens_vmap1 == 17 or pos_tokens_vmap1 == 18 or pos_tokens_vmap2 == 19 or pos_tokens_vmap2 == 20)*INPUT_MASK;
+OTHER_MASK = (1 - NOUN_TO_INTRODUCE_MASK)*(1 - VERB_MASK);
+CP_SEP_MASK = indicator(pos_tokens == 6)*INPUT_MASK;
+# note before_any does not mean before all, it covers any part of the sequence after some CP separator as long as that is still before any other subsequent CP separator
+CP_SEP_BEFORE_ANY_MASK = aggregate(select(pos_tokens == 6, 1, ==) and select(indices, indices, >=), 1)*INPUT_MASK; # acausal but limited to input mask (encoder of encoder decoder)
+CP_SEP_AFTER_ALL_MASK = 1 - CP_SEP_BEFORE_ANY_MASK;
+
+ordering_sequence = DEFINITE_ARTICLE_NOUN_MASK*DEFINITE_ARTICLE_NOUN_INTRO_RANK + NOUN_TO_INTRODUCE_MASK*(1 - DEFINITE_ARTICLE_NOUN_MASK)*NOUN_INTRO_RANK + VERB_MASK*VERB_INTRO_RANK + OTHER_MASK*OTHER_INTRO_RANK;
+
+input_tokens_sorted_by_type = sort(tokens, ordering_sequence);
+input_noun_mask_sorted = sort(NOUN_TO_INTRODUCE_MASK, ordering_sequence);
+input_verb_mask_sorted = sort(VERB_MASK, ordering_sequence);
+input_other_mask_sorted = sort(OTHER_MASK, ordering_sequence);
+input_indices_sorted = sort(indices, ordering_sequence);
+
+input_section_idx_includes_spaces = input_section_idx;
+star_in_output_sequence = OUTPUT_MASK*(indicator(tokens == "*"));
+star_in_output_count = selector_width(select(star_in_output_sequence, 1, ==));
+tokens_in_output = aggregate(select(input_section_idx_includes_spaces, OUTPUT_TYPE, ==) and select(indices, indices, ==),1);
+num_tokens_in_output_excluding_asterisks = selector_width(select(tokens_in_output, 1, ==)) - star_in_output_count;
+
+pipes_in_output = aggregate(select(indices, indices, ==) and select(tokens, "|", ==), 1);
+num_pipes_in_output = selector_width(select(pipes_in_output, 1, ==));
+
+nv_in_input_sequence = NOUN_TO_INTRODUCE_MASK+VERB_MASK;
+nv_in_input_count = selector_width(select(nv_in_input_sequence, 1, ==));
+
+# need to subtract duplicate verbs in COGS vs ReCOGS in the output, since verb is printed with each relationship (the number of repeats depends on how many relationships are present in the input sentence)
+# let us build a separate count of how many times the verb appears
+# then add min(v_in_output_sequence, 1) to nv_in_output_sequence to de-dupe it
+v_in_output_sequence = OUTPUT_MASK*(indicator(pos_tokens_vmap1 == 9 or pos_tokens_vmap2 == 10 or pos_tokens_vmap1 == 11 or pos_tokens_vmap2 == 12 or pos_tokens_vmap3 == 13 or pos_tokens_vmap4 == 14 or pos_tokens_vmap1 == 15 or pos_tokens_vmap1 == 16 or pos_tokens_vmap1 == 17 or pos_tokens_vmap1 == 18 or pos_tokens_vmap2 == 19 or pos_tokens_vmap2 == 20 or pos_tokens_vmap1==21));
+
+n_in_output_sequence = OUTPUT_MASK*(indicator(pos_tokens == 7));
+v_in_output_count = selector_width(select(v_in_output_sequence, 1, ==));
+n_in_output_count = selector_width(select(n_in_output_sequence, 1, ==));
+# count ";" to count fully introduced definite article nouns
+definite_article_noun_in_output_count = selector_width(select(OUTPUT_MASK*(indicator(tokens == ";")), 1, ==));
+
+def template_size(template_name) {
+  template_sizes = {
+ "": 0,
+ "v_trans_omissible_p1": 1,
+ "v_trans_omissible_p2": 2,
+ "v_trans_omissible_pp_p1": 1,
+ "v_trans_omissible_pp_p2": 2,
+ "v_trans_not_omissible": 2,
+ "v_trans_not_omissible_pp_p1": 1,
+ "v_trans_not_omissible_pp_p2": 2,
+ "v_cp_taking": 2,
+ "v_inf_taking": 5,
+ "v_unacc_p1": 2,
+ "v_unacc_p2": 1,
+ "v_unacc_pp_p1": 1,
+ "v_unacc_pp_p2": 2,
+ "v_unerg": 1,
+# "v_inf": 1,
+ "v_dat_p1": 3,
+ "v_dat_p2": 3,
+ "v_dat_pp_p1": 2,
+ "v_dat_pp_p2": 3,
+ "v_dat_pp_p3": 2,
+ "v_dat_pp_p4": 3
+  };
+  # v_inf_taking includes v_inf and an extra verb is why it is 4 instead of 2
+  return template_sizes[template_name];
+}
+def get_template_mapping(template_name, idx) {
+template_mapping1 = {
+ "": "",
+ "v_trans_omissible_p1": "agent",
+ "v_trans_omissible_p2": "agent",
+ "v_trans_omissible_pp_p1": "theme",
+ "v_trans_omissible_pp_p2": "theme",
+ "v_trans_not_omissible": "agent",
+ "v_trans_not_omissible_pp_p1": "theme",
+ "v_trans_not_omissible_pp_p2": "theme",
+ "v_cp_taking": "agent",
+ "v_inf_taking": "agent",
+ "v_unacc_p1": "agent",
+ "v_unacc_p2": "theme",
+ "v_unacc_pp_p1": "theme",
+ "v_unacc_pp_p2": "theme",
+ "v_unerg": "agent",
+ "v_inf": "agent",
+ "v_dat_p1": "agent",
+ "v_dat_p2": "agent",
+ "v_dat_pp_p1": "theme",
+ "v_dat_pp_p2": "theme",
+ "v_dat_pp_p3": "recipient",
+ "v_dat_pp_p4": "recipient"
+};
+template_mapping2 = {
+ "": "",
+ "v_trans_omissible_p1": "",
+ "v_trans_omissible_p2": "theme",
+ "v_trans_omissible_pp_p1": "",
+ "v_trans_omissible_pp_p2": "agent",
+ "v_trans_not_omissible": "theme",
+ "v_trans_not_omissible_pp_p1": "",
+ "v_trans_not_omissible_pp_p2": "agent",
+ "v_cp_taking": "ccomp",
+ "v_inf_taking": "xcomp",
+ "v_unacc_p1": "theme",
+ "v_unacc_p2": "",
+ "v_unacc_pp_p1": "",
+ "v_unacc_pp_p2": "agent",
+ "v_unerg": "",
+ "v_inf": "",
+ "v_dat_p1": "theme",
+ "v_dat_p2": "recipient",
+ "v_dat_pp_p1": "recipient",
+ "v_dat_pp_p2": "recipient",
+ "v_dat_pp_p3": "theme",
+ "v_dat_pp_p4": "theme"
+};
+template_mapping3 = {
+ "": "",
+ "v_trans_omissible_p1": "",
+ "v_trans_omissible_p2": "",
+ "v_trans_omissible_pp_p1": "",
+ "v_trans_omissible_pp_p2": "",
+ "v_trans_not_omissible": "",
+ "v_trans_not_omissible_pp_p1": "",
+ "v_trans_not_omissible_pp_p2": "",
+ "v_cp_taking": "",
+ "v_inf_taking": "v_inf_taking_last_verb_placeholder",
+ "v_unacc_p1": "",
+ "v_unacc_p2": "",
+ "v_unacc_pp_p1": "",
+ "v_unacc_pp_p2": "",
+ "v_unerg": "",
+ "v_inf": "",
+ "v_dat_p1": "recipient",
+ "v_dat_p2": "theme",
+ "v_dat_pp_p1": "",
+ "v_dat_pp_p2": "agent",
+ "v_dat_pp_p3": "",
+ "v_dat_pp_p4": "agent"
+};
+template_mapping4 = {
+ "": "",
+ "v_trans_omissible_p1": "",
+ "v_trans_omissible_p2": "",
+ "v_trans_omissible_pp_p1": "",
+ "v_trans_omissible_pp_p2": "",
+ "v_trans_not_omissible": "",
+ "v_trans_not_omissible_pp_p1": "",
+ "v_trans_not_omissible_pp_p2": "",
+ "v_cp_taking": "",
+ "v_inf_taking": "agent",
+ "v_unacc_p1": "",
+ "v_unacc_p2": "",
+ "v_unacc_pp_p1": "",
+ "v_unacc_pp_p2": "",
+ "v_unerg": "",
+ "v_inf": "",
+ "v_dat_p1": "",
+ "v_dat_p2": "",
+ "v_dat_pp_p1": "",
+ "v_dat_pp_p2": "",
+ "v_dat_pp_p3": "",
+ "v_dat_pp_p4": ""
+};
+return template_mapping1[template_name] if idx == 0 else (template_mapping2[template_name] if idx == 1 else (template_mapping3[template_name] if idx == 2 else (template_mapping4[template_name] if idx == 3 else "")));
+}
+
+# BEGIN SHARED BLOCK WITH RASP-for-RECOGS (encoder) (my code, owned by me)
+# https://github.com/willy-b/learning-rasp/blob/9f69ba43dc39373ffb378946bd2c89d303417dae/word-level-pos-tokens-recogs-style-decoder-loop.rasp#L308C1-L669C19
+set example ["a","boy","painted","the","girl"]
+# e.g. [1,7,9,1,7] or "a boy painted the girl"
+np_det_mask = select(7, pos_tokens, ==) and select(pos_tokens, 1, ==) and select(indices+1, indices, ==);
+np_prop_mask = select(8, pos_tokens, ==) and select(indices, indices, ==);
+verb_transitive_omissible_mask = select(9, pos_tokens_vmap1, ==) and select(indices, indices, ==);
+np_det_sequence = aggregate(np_det_mask, 1);
+np_prop_sequence = aggregate(np_prop_mask, 1);
+np_det_before = select(np_det_sequence, 1, ==) and select(indices-2, indices, ==);
+np_det_after = select(np_det_sequence, 1, ==) and select(indices+1, indices, ==);
+np_prop_before = select(np_prop_sequence, 1, ==) and select(indices-1, indices, ==);
+np_prop_after = select(np_prop_sequence, 1, ==) and select(indices+1, indices, ==);
+# note we do not use a tree-based approach to handle np_pp but find that simply ignoring "pp np" when finding nouns for relationship right-indices is sufficient for a flat solution for e.g. np verb_transitive_omissible np here.
+np_before_mask = np_det_before or np_prop_before;
+np_after_mask = np_det_after or np_prop_after;
+# can optimize the following 4 steps away, combine into above
+np_before_sequence = aggregate(np_before_mask, 1);
+np_after_sequence = aggregate(np_after_mask, 1);
+np_before_mask = select(np_before_sequence, 1, ==) and select(indices,indices, ==);
+np_after_mask = select(np_after_sequence, 1, ==) and select(indices,indices, ==);
+np_v_trans_omissible_np = aggregate(np_after_mask and np_before_mask and verb_transitive_omissible_mask, 1);
+
+# Example: np_v_trans_omissible_np(['a', 'boy', 'painted', 'the', 'girl']) = [0, 0, 1, 0, 0] (ints)
+
+# expected match:
+# Example: np_v_trans_omissible_np([8, 9, 1, 7]) = [0, 1, 0, 0] (ints)
+# expected non-match:
+# Example: np_v_trans_omissible_np([7, 9, 1, 7]) = [0]*4 (ints)
+# expected match:
+# Example: np_v_trans_omissible_np([1, 7, 9, 1, 7]) = [0, 0, 1, 0, 0] (ints)
+# expected match:
+# Example: np_v_trans_omissible_np([8, 9, 8]) = [0, 1, 0] (ints)
+# expected match:
+# Example: np_v_trans_omissible_np([1, 7, 9, 1, 7]) = [0, 0, 1, 0, 0] (ints)
+
+# np v_trans_omissible_p1
+# e.g. [1,7,9]
+set example ["a","boy","painted"]
+np_v_trans_omissible = aggregate(np_after_mask and not np_before_mask and verb_transitive_omissible_mask, 1);
+# Example: np_v_trans_omissible(['a', 'boy', 'painted']) = [0, 0, 1] (ints)
+# Example: np_v_trans_omissible([1, 7, 9]) = [0, 0, 1] (ints)
+
+# np v_trans_not_omissible np
+# e.g. [1,7,11,1,7]
+set example ["a","boy","respected","the","girl"]
+v_trans_not_omissible_mask = select(11, pos_tokens_vmap1, ==) and select(indices, indices, ==);
+np_v_trans_not_omissible_np = aggregate(np_after_mask and v_trans_not_omissible_mask and np_before_mask, 1);
+# Example: np_v_trans_not_omissible_np(['a', 'boy', 'respected', 'the', 'girl']) = [0, 0, 1, 0, 0] (ints)
+# Example: np_v_trans_not_omissible_np([1, 7, 11, 1, 7]) = [0, 0, 1, 0, 0] (ints)
+
+# np was v_trans_omissible_pp by np
+# e.g. [1,7,3,10,4,1,7]
+set example ["the", "girl", "was", "painted", "by", "the", "boy"]
+# I think this can all be combined into a single select and aggregate but doing it the easy inefficient way first
+v_trans_omissible_pp_mask = select(10, pos_tokens_vmap2, ==) and select(indices, indices, ==);
+was_mask = select(3, pos_tokens, ==) and select(indices, indices, ==);
+by_mask = select(4, pos_tokens, ==) and select(indices, indices, ==);
+was_sequence = aggregate(was_mask, 1);
+by_sequence = aggregate(by_mask, 1);
+# was_before = select(was_sequence, 1, ==) and select(indices-1, indices, ==);
+was_after = select(was_sequence, 1, ==) and select(indices+1, indices, ==);
+was_after_sequence = aggregate(was_after, 1);
+by_before = select(by_sequence, 1, ==) and select(indices-1, indices, ==);
+# by_after = select(by_sequence, 1, ==) and select(indices+1, indices, ==);
+by_before_sequence = aggregate(by_before, 1);
+was_after = select(was_after_sequence, 1, ==) and select(indices, indices, ==);
+by_before = select(by_before_sequence, 1, ==) and select(indices, indices, ==);
+
+np_det_two_before = select(np_det_sequence, 1, ==) and select(indices-3, indices, ==);
+np_det_two_after = select(np_det_sequence, 1, ==) and select(indices+2, indices, ==);
+np_prop_two_before = select(np_prop_sequence, 1, ==) and select(indices-2, indices, ==);
+np_prop_two_after = select(np_prop_sequence, 1, ==) and select(indices+2, indices, ==);
+np_two_before_mask = np_det_two_before or np_prop_two_before;
+np_two_after_mask = np_det_two_after or np_prop_two_after;
+np_two_before_sequence = aggregate(np_two_before_mask, 1);
+np_two_after_sequence = aggregate(np_two_after_mask, 1);
+np_two_before_mask = select(np_two_before_sequence, 1, ==) and select(indices, indices, ==);
+np_two_after_mask = select(np_two_after_sequence, 1, ==) and select(indices, indices, ==);
+
+np_was_v_trans_omissible_pp_by_np = aggregate(was_after and v_trans_omissible_pp_mask and by_before and np_two_before_mask and np_two_after_mask, 1);
+
+# Example: np_was_v_trans_omissible_pp_by_np(['the', 'girl', 'was', 'painted', 'by', 'the', 'boy']) = [0, 0, 0, 1, 0, 0, 0] (ints)
+# Example: np_was_v_trans_omissible_pp_by_np([1, 7, 3, 10, 4, 1, 7]) = [0, 0, 0, 1, 0, 0, 0] (ints)
+
+# np v_unacc np
+# e.g. [1, 7, 15, 1, 7]
+set example ["the", "boy", "grew", "the", "flower"]
+v_unacc_mask = select(15, pos_tokens_vmap1, ==) and select(indices, indices, ==);
+np_v_unacc_np = aggregate(np_after_mask and np_before_mask and v_unacc_mask, 1);
+
+# s-op: np_v_unacc_np
+# Example: np_v_unacc_np(['the', 'boy', 'grew', 'the', 'flower']) = [0, 0, 1, 0, 0] (ints)
+# Example: np_v_unacc_np([1, 7, 15, 1, 7]) = [0, 0, 1, 0, 0] (ints)
+
+# s-op: np_v_unacc_np
+# Example: np_v_unacc_np([1, 7, 15, 8]) = [0, 0, 1, 0] (ints)
+
+# s-op: np_v_unacc_np
+# Example: np_v_unacc_np([8, 15, 1, 7]) = [0, 1, 0, 0] (ints)
+
+# s-op: np_v_unacc_np
+# Example: np_v_unacc_np([8, 15, 8]) = [0, 1, 0] (ints)
+
+# np v_inf_taking to v_inf
+# e.g. [1, 7, 14, 5, 17]
+set example ["the", "scientist", "wanted", "to", "read"]
+
+v_inf_taking_mask = select(14, pos_tokens_vmap4, ==) and select(indices, indices, ==);
+v_inf_mask = select(17, pos_tokens_vmap1, ==) and select(indices, indices, ==);
+v_inf_sequence = aggregate(v_inf_mask, 1);
+v_inf_two_before_mask = select(v_inf_sequence, 1, ==) and select(indices-2, indices, ==);
+v_inf_two_before_sequence = aggregate(v_inf_two_before_mask, 1);
+v_inf_two_before_mask = select(v_inf_two_before_sequence, 1, ==) and select(indices, indices, ==);
+to_mask = select(5, pos_tokens, ==) and select(indices, indices, ==);
+to_sequence = aggregate(to_mask, 1);
+to_before_mask = select(to_sequence, 1, ==) and select(indices-1, indices, ==);
+to_before_sequence = aggregate(to_before_mask, 1);
+to_before_mask = select(to_before_sequence, 1, ==) and select(indices, indices, ==);
+# note previous steps can be simplified further to reduce steps and resource requirements
+np_v_inf_taking_to_v_inf = aggregate(np_after_mask and v_inf_taking_mask and to_before_mask and v_inf_two_before_mask, 1);
+
+# Example: np_v_inf_taking_to_v_inf(['the', 'scientist', 'wanted', 'to', 'read']) = [0, 0, 1, 0, 0] (ints)
+
+# s-op: np_v_inf_taking_to_v_inf
+# Example: np_v_inf_taking_to_v_inf([1, 7, 14, 5, 17]) = [0, 0, 1, 0, 0] (ints)
+# s-op: np_v_inf_taking_to_v_inf
+# Example: np_v_inf_taking_to_v_inf([8, 14, 5, 17]) = [0, 1, 0, 0] (ints)
+
+# np v_unerg
+# e.g. [1,7,16]
+set example ["the", "guest", "smiled"]
+v_unerg_mask = select(16, pos_tokens_vmap1, ==) and select(indices, indices, ==);
+np_v_unerg = aggregate(np_after_mask and v_unerg_mask, 1);
+
+# Example: np_v_unerg(['the', 'guest', 'smiled']) = [0, 0, 1] (ints)
+
+# s-op: np_v_unerg
+# Example: np_v_unerg([1, 7, 16]) = [0, 0, 1] (ints)
+# s-op: np_v_unerg
+# Example: np_v_unerg([8, 16]) = [0, 1] (ints)
+
+# e.g. [1, 7, 15]
+set example ["the", "flower", "grew"]
+# np v_unacc_p2
+np_v_unacc_p2 = aggregate(np_after_mask and v_unacc_mask and not np_before_mask, 1);
+# Example: np_v_unacc_p2(['the', 'flower', 'grew']) = [0, 0, 1] (ints)
+
+# s-op: np_v_unacc_p2
+# Example: np_v_unacc_p2([1, 7, 15]) = [0, 0, 1] (ints)
+# s-op: np_v_unacc_np
+# Example: np_v_unacc_np([1, 7, 15]) = [0]*3 (ints) # should be zeroes as no NP after v_unacc in this case
+# s-op: np_v_unacc_p2
+# Example: np_v_unacc_p2([1, 7, 15, 1, 7]) = [0]*5 (ints) # here np_v_unacc_p2 should be zero because we greedily match np_v_unacc_np instead (since there are NPs on either side)
+# s-op: np_v_unacc_np
+# Example: np_v_unacc_np([1, 7, 15, 1, 7]) = [0, 0, 1, 0, 0] (ints)
+
+# v_dat_p1 np pp_iobj
+# e.g. [8,18,1,7,5,1,7]
+set example ["Ella", "sold", "a", "car", "to", "the", "customer"]
+v_dat_mask = select(18, pos_tokens_vmap1, ==) and select(indices, indices, ==);
+
+pp_iobj_sequence = aggregate(to_mask and np_before_mask, 1);
+pp_iobj_mask = select(pp_iobj_sequence, 1, ==) and select(indices, indices, ==);
+pp_iobj_before_mask = select(pp_iobj_sequence, 1, ==) and select(indices-1, indices, ==);
+pp_iobj_before_sequence = aggregate(pp_iobj_before_mask, 1);
+pp_iobj_before_mask = select(pp_iobj_before_sequence, 1, ==) and select(indices, indices, ==);
+pp_iobj_two_before_mask = select(pp_iobj_sequence, 1, ==) and select(indices-2, indices, ==);
+pp_iobj_two_before_sequence = aggregate(pp_iobj_two_before_mask, 1);
+pp_iobj_two_before_mask = select(pp_iobj_two_before_sequence, 1, ==) and select(indices, indices, ==);
+np_det_left_mask = select(np_det_sequence, 1, ==) and select(indices-1, indices, ==);
+np_det_left_sequence = aggregate(np_det_left_mask, 1);
+np_det_left_mask = select(np_det_left_sequence, 1, ==) and select(indices, indices, ==);
+np_pp_iobj_sequence = aggregate((np_prop_mask and pp_iobj_before_mask) or (np_det_left_mask and pp_iobj_two_before_mask), 1.0);
+# TODO replace this with strict handling of prepositional phrase chains in np_v_dat_p_np_pp_iobj
+any_np_pp_iobj_before_mask = select(np_pp_iobj_sequence, 1, ==) and select(indices, indices, >);
+any_np_pp_iobj_before_sequence = aggregate(any_np_pp_iobj_before_mask, 1);
+any_np_pp_iobj_before_mask = select(any_np_pp_iobj_before_sequence, 1, ==) and select(indices, indices, ==);
+np_v_dat_p_np_pp_iobj = aggregate(np_after_mask and v_dat_mask and any_np_pp_iobj_before_mask, 1.0);
+# Example: np_v_dat_p_np_pp_iobj(['Ella', 'sold', 'a', 'car', 'to', 'the', 'customer']) = [0, 1.0, 0, 0, 0, 0, 0] (floats)
+
+# np v_dat_p2 np np
+# e.g. [8,18,1,7,1,7]
+set example ["Ella","sold","a","customer","a","car"]
+np_np_sequence = aggregate((np_prop_mask and np_before_mask) or (np_det_left_mask and np_two_before_mask), 1);
+# would not support prepositional phrase modification on middle NP
+# np_np_before_mask = select(np_np_sequence, 1, ==) and select(indices-1, indices, ==);
+np_np_any_before_mask = select(np_np_sequence, 1, ==) and select(indices, indices, >);
+np_np_any_before_sequence = aggregate(np_np_any_before_mask, 1);
+np_np_any_before_mask = select(np_np_any_before_sequence, 1, ==) and select(indices, indices, ==);
+np_v_dat_p_np_np = aggregate(np_after_mask and v_dat_mask and np_before_mask and np_np_any_before_mask, 1);
+# Example: np_v_dat_p_np_np(['Ella', 'sold', 'a', 'customer', 'a', 'car']) = [0, 1, 0, 0, 0, 0] (ints)
+# Example: np_v_dat_p_np_np([8, 18, 1, 7, 1, 7]) = [0, 1, 0, 0, 0, 0] (ints)
+
+# np was v_dat_pp_p4 np by np
+# e.g. [1,7,3,19,1,7,4,8]
+set example ["the","customer","was","sold","a","car","by","Ella"]
+v_dat_pp_mask = select(19, pos_tokens_vmap2, ==) and select(indices, indices, ==);
+by_np_sequence = aggregate(np_before_mask and by_mask, 1);
+by_np_before_mask = select(by_np_sequence, 1, ==) and select(indices-1, indices, ==);
+by_np_before_sequence = aggregate(by_np_before_mask, 1);
+by_np_before_mask = select(by_np_before_sequence, 1, ==) and select(indices, indices, ==);
+by_np_two_before_mask = select(by_np_before_sequence, 1, ==) and select(indices-1, indices, ==);
+by_np_two_before_sequence = aggregate(by_np_two_before_mask, 1);
+by_np_two_before_mask = select(by_np_two_before_sequence, 1, ==) and select(indices, indices, ==);
+np_by_np_sequence = aggregate((np_prop_mask and by_np_before_mask) or (np_det_left_mask and by_np_two_before_mask), 1.0);
+np_by_np_any_before_mask = select(np_by_np_sequence, 1, ==) and select(indices, indices, >);
+np_by_np_any_before_sequence = aggregate(np_by_np_any_before_mask, 1);
+np_by_np_any_before_mask = select(np_by_np_any_before_sequence, 1, ==) and select(indices, indices, ==);
+np_was_v_dat_pp_np_by_np = aggregate(np_two_after_mask and was_after and v_dat_pp_mask and np_by_np_any_before_mask, 1.0);
+# Example: np_was_v_dat_pp_np_by_np(['the', 'customer', 'was', 'sold', 'a', 'car', 'by', 'Ella']) = [0, 0, 0, 1.0, 0, 0, 0, 0] (floats)
+# Example: np_was_v_dat_pp_np_by_np([1, 7, 3, 19, 1, 7, 4, 8]) = [0, 0, 0, 1.0, 0, 0, 0, 0] (floats)
+
+# np was v_dat_pp_p3 np
+# e.g. [1,7,3,19,1,7]
+set example ["the","customer","was","sold","a","car"]
+np_was_v_dat_pp_p3_np = aggregate(np_two_after_mask and was_after and v_dat_pp_mask and np_before_mask, 1);
+# Example: np_was_v_dat_pp_p3_np(['the', 'customer', 'was', 'sold', 'a', 'car']) = [0, 0, 0, 1, 0, 0] (ints)
+# Example: np_was_v_dat_pp_p3_np([1, 7, 3, 18, 1, 7]) = [0, 0, 0, 1, 0, 0] (ints)
+
+# np was v_dat_pp_p1 to np
+# e.g. [1,7,3,19,5,1,7]
+set example ["the","car","was","sold","to","the","customer"]
+np_v_dat_pp_to_np = aggregate(v_dat_pp_mask and np_two_after_mask and was_after and to_before_mask and np_two_before_mask, 1);
+# Example: np_v_dat_pp_to_np(['the', 'car', 'was', 'sold', 'to', 'the', 'customer']) = [0, 0, 0, 1, 0, 0, 0] (ints)
+
+# np was v_dat_pp_p2 to np by np
+# (was v_dat_pp_p2 pp_iobj by np)
+# e.g. [1,7,3,19,5,1,7,4,8]
+set example ["the","car","was","sold","to","the","customer","by","Ella"]
+to_np_by_np_sequence = aggregate(np_by_np_any_before_mask and to_mask, 1);
+to_np_by_np_before_mask = select(to_np_by_np_sequence, 1, ==) and select(indices-1, indices, ==);
+to_np_by_np_before_sequence = aggregate(to_np_by_np_before_mask, 1);
+to_np_by_np_before_mask = select(to_np_by_np_before_sequence, 1, ==) and select(indices, indices, ==);
+np_was_v_dat_pp_to_np_by_np = aggregate(np_two_after_mask and was_after and v_dat_pp_mask and to_np_by_np_before_mask, 1);
+# Example: np_was_v_dat_pp_to_np_by_np(['the', 'car', 'was', 'sold', 'to', 'the', 'customer', 'by', 'Ella']) = [0, 0, 0, 1, 0, 0, 0, 0, 0] (ints)
+
+# np was v_trans_not_omissible_pp_p1 .
+# e.g. [1,7,3,12]
+set example ["the","girl","was","respected"]
+v_trans_not_omissible_pp_mask = select(pos_tokens_vmap2, 12, ==) and select(indices, indices, ==);
+np_was_v_trans_not_omissible_pp_p1 = aggregate(np_two_after_mask and was_after and v_trans_not_omissible_pp_mask and not np_before_mask and not by_before, 1.0);
+# Example: np_was_v_trans_not_omissible_pp_p1(['the', 'girl', 'was', 'respected']) = [0, 0, 0, 1.0] (floats)
+
+# np was v_trans_not_omissible_pp_p2 by np
+# e.g. [1,7,3,12,4,1,7]
+set example ["the","girl","was","respected","by","a","boy"]
+np_was_v_trans_not_omissible_pp_p2_by_np = aggregate(np_two_after_mask and was_after and v_trans_not_omissible_pp_mask and by_before and np_two_before_mask, 1.0);
+# Example: np_was_v_trans_not_omissible_pp_p2_by_np(['the', 'girl', 'was', 'respected', 'by', 'a', 'boy']) = [0, 0, 0, 1.0, 0, 0, 0] (floats)
+
+# np was v_trans_omissible_pp_p1
+# e.g. [1,7,3,10]
+set example ["the","girl","was","painted"]
+np_was_v_trans_omissible_pp_p1 = aggregate(np_two_after_mask and was_after and v_trans_omissible_pp_mask, 1.0);
+# Example: np_was_v_trans_omissible_pp_p1(['the', 'girl', 'was', 'painted']) = [0, 0, 0, 1.0] (floats)
+
+# np was v_unacc_pp_p1
+# e.g. [1,7,3,20]
+set example ["the","flower","was","grown"]
+v_unacc_pp_mask = select(pos_tokens_vmap2, 20, ==) and select(indices, indices, ==);
+np_was_v_unacc_pp_p1 = aggregate(np_two_after_mask and was_after and v_unacc_pp_mask and not by_before, 1.0);
+# Example: np_was_v_unacc_pp_p1(['the', 'flower', 'was', 'grown']) = [0, 0, 0, 1.0] (floats)
+
+# np was v_unacc_pp_p2 by np
+# e.g. [1,7,3,20,4,1,7]
+set example ["the","flower","was","grown","by","a","boy"]
+np_was_v_unacc_pp_p2_by_np = aggregate(np_two_after_mask and was_after and v_unacc_pp_mask and by_before and np_two_before_mask, 1.0);
+# Example: np_was_v_unacc_pp_p2_by_np(['the', 'flower', 'was', 'grown', 'by', 'a', 'boy']) = [0, 0, 0, 1.0, 0, 0, 0] (floats)
+
+# EXAMPLES
+# np v_trans_omissible_p2 np
+# e.g. [1,7,9,1,7]
+set example ["a","boy","painted","the","girl"]
+np_v_trans_omissible_np;
+
+# np v_trans_not_omissible np
+# e.g. [1,7,11,1,7]
+set example ["a","boy","respected","the","girl"]
+np_v_trans_not_omissible_np;
+
+# np was v_trans_not_omissible_pp_p1
+# e.g. [1,7,3,12]
+set example ["the","girl","was","respected"]
+np_was_v_trans_not_omissible_pp_p1;
+
+# np was v_trans_not_omissible_pp_p2 by np
+# e.g. [1,7,3,12,4,1,7]
+set example ["the","girl","was","respected","by","a","boy"]
+np_was_v_trans_not_omissible_pp_p2_by_np;
+
+# np was v_trans_omissible_pp_p1
+# e.g. [1,7,3,10]
+set example ["the","girl","was","painted"]
+np_was_v_trans_omissible_pp_p1;
+
+# np v_trans_omissible_p1
+# e.g. [1,7,9]
+set example ["a","boy","painted"]
+np_v_trans_omissible;
+
+# np was v_trans_omissible_pp by np
+# e.g. [1,7,3,10,4,1,7]
+set example ["the","girl","was","painted","by","a","boy"]
+np_was_v_trans_omissible_pp_by_np;
+
+# np v_unacc np
+# e.g. [1, 7, 15, 1, 7]
+set example ["the","boy","grew","the","flower"]
+np_v_unacc_np;
+
+# np was v_unacc_pp_p1
+# e.g. [1,7,3,20]
+set example ["the","flower","was","grown"]
+np_was_v_unacc_pp_p1;
+
+# np was v_unacc_pp_p2 by np
+# e.g. [1,7,3,20,4,1,7]
+set example ["the","flower","was","grown","by","a","boy"]
+np_was_v_unacc_pp_p2_by_np;
+
+# np v_inf_taking to v_inf
+# e.g. [8, 14, 5, 17]
+set example ["the","scientist","wanted","to","read"]
+np_v_inf_taking_to_v_inf;
+
+# np v_unerg
+# e.g. [1,7,16]
+set example ["the","guest","smiled"]
+np_v_unerg;
+
+# np v_unacc_p2
+# e.g. [1, 7, 15]
+set example ["the","flower","grew"]
+np_v_unacc_p2;
+
+# np v_dat_p1 np pp_iobj
+# e.g. [8,18,1,7,5,1,7]
+set example ["Ella","sold","a","car","to","the","customer"]
+np_v_dat_p_np_pp_iobj;
+
+# np v_dat_p2 np np
+# e.g. [8,18,1,7,1,7]
+set example ["Ella","sold","a","customer","a","car"]
+np_v_dat_p_np_np;
+
+# np was v_dat_pp_p3 np
+# e.g. [1,7,3,19,1,7]
+set example ["the","customer","was","sold","a","car"]
+np_was_v_dat_pp_p3_np;
+
+# np was v_dat_pp_p4 np by np
+# e.g. [1,7,3,19,1,7,4,8]
+set example ["the","customer","was","sold","a","car","by","Ella"]
+np_was_v_dat_pp_np_by_np;
+
+# np was v_dat_pp_p2 to np by np
+# (was v_dat_pp_p2 pp_iobj by np)
+# e.g. [1,7,3,19,5,1,7,4,8]
+set example ["the","car","was","sold","to","the","customer","by","Ella"]
+np_was_v_dat_pp_to_np_by_np;
+
+# np was v_dat_pp_p1 to np
+# e.g. [1,7,3,19,5,1,7]
+set example ["the","car","was","sold","to","the","customer"]
+np_v_dat_pp_to_np;
+
+# END SHARED BLOCK with RASP-for-ReCOGS (encoder)
+
+template_name = "";
+# matching one template is sufficient, even when complement phrase recursion is implemented due to simplicity of COGS input grammar (complement phrases just add to the beginning and can be masked away)
+any_np_v_trans_omissible = aggregate(select(np_v_trans_omissible*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_trans_omissible_p1" if (any_np_v_trans_omissible == 1) else template_name;
+
+any_v_trans_omissible_p2 = aggregate(select(np_v_trans_omissible_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_trans_omissible_p2" if (any_v_trans_omissible_p2 == 1) else template_name;
+
+any_v_trans_omissible_pp_p1 = aggregate(select(np_was_v_trans_omissible_pp_p1*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_trans_omissible_pp_p1" if (any_v_trans_omissible_pp_p1 == 1) else template_name;
+
+any_v_trans_omissible_pp_p2 = aggregate(select(np_was_v_trans_omissible_pp_by_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_trans_omissible_pp_p2" if (any_v_trans_omissible_pp_p2 == 1) else template_name;
+
+any_v_trans_not_omissible = aggregate(select(np_v_trans_not_omissible_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_trans_not_omissible" if (any_v_trans_not_omissible == 1) else template_name;
+
+any_v_trans_not_omissible_pp_p1 = aggregate(select(np_was_v_trans_not_omissible_pp_p1*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_trans_not_omissible_pp_p1" if (any_v_trans_not_omissible_pp_p1 == 1) else template_name;
+
+any_v_trans_not_omissible_pp_p2 = aggregate(select(np_was_v_trans_not_omissible_pp_p2_by_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_trans_not_omissible_pp_p2" if (any_v_trans_not_omissible_pp_p2 == 1) else template_name;
+
+any_v_unacc_p1 = aggregate(select(np_v_unacc_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_unacc_p1" if (any_v_unacc_p1 == 1) else template_name;
+
+any_v_unacc_p2 = aggregate(select(np_v_unacc_p2*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_unacc_p2" if (any_v_unacc_p2 == 1) else template_name;
+
+any_v_unacc_pp_p1 = aggregate(select(np_was_v_unacc_pp_p1*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_unacc_pp_p1" if (any_v_unacc_pp_p1 == 1) else template_name;
+
+any_v_unacc_pp_p2 = aggregate(select(np_was_v_unacc_pp_p2_by_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_unacc_pp_p2" if (any_v_unacc_pp_p2 == 1) else template_name;
+
+any_v_unerg = aggregate(select(np_v_unerg*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_unerg" if (any_v_unerg == 1) else template_name;
+
+# any_v_inf = aggregate(select(np_v_inf_taking_to_v_inf*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+# template_name = "v_inf" if (any_v_inf == 1) else template_name;
+
+any_v_inf_taking = aggregate(select(np_v_inf_taking_to_v_inf*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_inf_taking" if (any_v_inf_taking == 1) else template_name;
+
+any_v_dat_p1 = aggregate(select(np_v_dat_p_np_pp_iobj*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_dat_p1" if (any_v_dat_p1 == 1) else template_name;
+
+any_v_dat_p2 = aggregate(select(np_v_dat_p_np_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_dat_p2" if (any_v_dat_p2 == 1) else template_name;
+
+any_v_dat_pp_p1 = aggregate(select(np_v_dat_pp_to_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_dat_pp_p1" if (any_v_dat_pp_p1 == 1) else template_name;
+
+any_v_dat_pp_p3 = aggregate(select(np_was_v_dat_pp_p3_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_dat_pp_p3" if (any_v_dat_pp_p3 == 1) else template_name;
+
+any_v_dat_pp_p4 = aggregate(select(np_was_v_dat_pp_np_by_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_dat_pp_p4" if (any_v_dat_pp_p4 == 1) else template_name;
+
+# must be checked after P4
+any_v_dat_pp_p2 = aggregate(select(np_was_v_dat_pp_to_np_by_np*CP_SEP_AFTER_ALL_MASK, 1, ==), 1);
+template_name = "v_dat_pp_p2" if (any_v_dat_pp_p2 == 1) else template_name;
+
+# this is a main problem with COGS vs ReCOGS is we output the verb repeatedly in the LF output so we need to ignore some of the duplicates
+# but they have a varying count depending on the grammar pattern being recognized
+# and the same verb can be repeated in the complement phrase prefix
+# however in complement phrase usage we know they will only have 2 repetitions (no more no less)
+cp_verb_in_input_count = selector_width(select(VERB_MASK*CP_SEP_BEFORE_ANY_MASK, 1, ==));
+# we can check whether v_in_output_count <= 2*cp_verb_in_input_count , if so, we can divide by 2 taking ceiling to get the v_uniq_in_output_count
+# otherwise, we take `(v_in_output_count - 2*cp_verb_in_input_count)` and add 1 if it is not v_inf_taking_to_v_inf
+# if it is v_inf_taking_to_v_inf and v_in_output_count > 2*cp_verb_in_input_count , we add 1 if (v_in_output_count - 2*cp_verb_in_input_count) <= template_size(template_name) ,
+# else we can add 2
+v_in_output_uniq_count = round(v_in_output_count/2 + 0.01) if (v_in_output_count <= 2*cp_verb_in_input_count) else (cp_verb_in_input_count + 1 + (1 if (v_in_output_count - 2*cp_verb_in_input_count) > (2 if (template_name == "v_inf_taking") else template_size(template_name)) else 0));
+nv_uniq_in_output_count = n_in_output_count + v_in_output_uniq_count;
+
+nv_in_output_count = n_in_output_count + v_in_output_count;
+
+# introducing variables
+output = "";
+# definite article word handling
+before_target_word_index = aggregate(select(indices, nv_uniq_in_output_count, ==), input_indices_sorted)-1;
+has_star = (aggregate(select(indices, before_target_word_index, ==), tokens) == "the") or (aggregate(select(indices, before_target_word_index, ==), tokens) == "The");
+last_output_is_star = aggregate(select(indices, length-1, ==), tokens) == "*";
+before_target_word_index_after_idx_0 = aggregate(select(indices, nv_uniq_in_output_count-1, ==), input_indices_sorted)-1;
+has_star_after_idx_0 = (aggregate(select(indices, before_target_word_index_after_idx_0, ==), tokens) == "the") or (aggregate(select(indices, before_target_word_index_after_idx_0, ==), tokens) == "The");
+
+input_nv_sorted_by_type = input_tokens_sorted_by_type * (input_noun_mask_sorted + input_verb_mask_sorted);
+
+cp_in_input_sequence = CP_SEP_MASK;
+cp_in_input_count = selector_width(select(cp_in_input_sequence, 1, ==));
+cp_in_output_sequence = OUTPUT_MASK*indicator(tokens == "ccomp")*OUTPUT_MASK;
+cp_in_output_count = selector_width(select(cp_in_output_sequence, 1, ==));
+
+atrx_in_output_sequence = OUTPUT_MASK*(indicator(tokens == "agent" or tokens == "theme" or tokens=="recipient" or tokens=="xcomp"));
+agent_theme_recipient_xcomp_output_count = selector_width(select(atrx_in_output_sequence, 1, ==)) - cp_in_output_count;
+
+# select against nv index excluding any (pp np ; do not confuse with np_pp, we want the left most child of np_pp)
+# create a sequence of np_det,np_prop indices excluding any np which is preceded by pp
+pp_sequence = indicator(pos_tokens == 2);
+pp_one_after_mask = select(pp_sequence, 1, ==) and select(indices+1, indices, ==);
+pp_one_after_sequence = aggregate(pp_one_after_mask, 1);
+pp_one_after_mask = select(pp_one_after_sequence, 1, ==) and select(indices, indices, ==);
+
+pp_two_after_mask = select(pp_sequence, 1, ==) and select(indices+2, indices, ==);
+pp_two_after_sequence = aggregate(pp_two_after_mask, 1);
+pp_two_after_mask = select(pp_two_after_sequence, 1, ==) and select(indices, indices, ==);
+
+np_det_diag_mask = select(aggregate(np_det_mask, 1), 1, ==) and select(indices, indices, ==);
+np_prop_diag_mask = select(aggregate(np_prop_mask, 1), 1, ==) and select(indices, indices, ==);
+
+no_pp_np_mask = 1 - aggregate((pp_one_after_mask and np_prop_diag_mask) or (pp_two_after_mask and np_det_diag_mask), 1);
+
+# for this input mask we need the common and proper nouns (this is not for introducing nouns which in COGS we do not introduce proper nouns, but for getting the index)
+NOUN_MASK = indicator(pos_tokens == 7 or pos_tokens == 8)*INPUT_MASK;
+nps_without_pp_prefix_indices = selector_width(select(NOUN_MASK*no_pp_np_mask, 1, ==) and select(indices, indices, <=))*NOUN_MASK*no_pp_np_mask;
+
+# for COGS instead of ReCOGS,
+# we cannot subtract the nv_in_input_count here
+# since nouns are no longer introduced before verbs (still adapting this to COGS)
+# note there is an implicit +1 here since this is only used after the current relationship is output, so it is a 1-based index at time of use
+np_idx = agent_theme_recipient_xcomp_output_count;
+right_idx = aggregate(select(nps_without_pp_prefix_indices, np_idx+cp_in_output_count, ==), indices);
+
+nps_with_pp_prefix_indices = selector_width(select(NOUN_MASK*(1-no_pp_np_mask), 1, ==) and select(indices, indices, <=))*NOUN_MASK*(1 - no_pp_np_mask);
+pp_in_output_count  = selector_width(select(OUTPUT_MASK*(indicator(pos_tokens == 2)), 1, ==));
+right_pp_np_idx = aggregate(select(nps_with_pp_prefix_indices, pp_in_output_count, ==), indices);
+right_pp_np_token = aggregate(select(indices, right_pp_np_idx, ==), tokens);
+is_right_pp_np_idx_proper_noun = right_pp_np_token == 8;
+
+# points to 2nd verb for xcomp for v_inf_taking_v_inf
+right_idx = aggregate(select(indices, nv_uniq_in_output_count, ==), input_indices_sorted) if (template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count == 2) else right_idx;
+
+# points to 1st noun for 2nd v_inf agent in v_inf_taking_v_inf
+nps_without_pp_prefix_indices_after_cp_one_based = (selector_width(select(CP_SEP_AFTER_ALL_MASK*NOUN_MASK*no_pp_np_mask, 1, ==) and select(indices, indices, <=)))*CP_SEP_AFTER_ALL_MASK*NOUN_MASK*no_pp_np_mask;
+right_idx = aggregate(select(nps_without_pp_prefix_indices_after_cp_one_based, 1, ==), indices) if (template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count > 2) else right_idx;
+right_token = aggregate(select(indices, right_idx, ==), tokens);
+
+right_pos = aggregate(select(indices, right_idx, ==), pos_tokens);
+is_right_idx_proper_noun = right_pos == 8 and not (template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count == 2);
+
+relationship_right_index = right_idx;
+relationship_right_token = right_token;
+
+# noting that n_in_output_count excludes proper nouns as in COGS they are not introduced
+first_verb_in_output_if_on_verb_offset = -7*n_in_output_count;
+
+pps_in_input_sequence = INPUT_MASK*(indicator(pos_tokens == 2));
+pps_in_input_count = selector_width(select(pps_in_input_sequence, 1, ==));
+pps_index = pps_in_input_sequence*selector_width(select(pps_in_input_sequence, 1, ==) and select(indices,indices, <=));
+nmods_and_pps_in_output_sequence = OUTPUT_MASK*(indicator(tokens == "nmod . in" or tokens == "nmod . beside" or tokens=="nmod . on"));
+nmods_and_pps_in_output_count = selector_width(select(nmods_and_pps_in_output_sequence, 1, ==));
+
+DEFINITE_ARTICLE_NOUN_INTRO_RANK = 1; # definite article nouns are introduced first in COGS
+NOUN_INTRO_RANK = 2; # excludes proper nouns in COGS
+VERB_INTRO_RANK = 2; # intentionally same as prior (nouns and verbs stay in their same order in COGS)
+PP_INTRO_RANK = 2; # intentionally same as prior, and we intro prepositional noun modifiers in COGS in the same order as appeared in the sentence (not in ReCOGS, we can output at end there)
+OTHER_INTRO_RANK = 3; # not introduced
+
+PP_MASK = indicator(pos_tokens == 2)*INPUT_MASK;
+OTHER_MASK = (1 - NOUN_TO_INTRODUCE_MASK)*(1 - VERB_MASK)*(1 - PP_MASK);
+
+ordering_sequence = DEFINITE_ARTICLE_NOUN_MASK*DEFINITE_ARTICLE_NOUN_INTRO_RANK + NOUN_TO_INTRODUCE_MASK*(1 - DEFINITE_ARTICLE_NOUN_MASK)*NOUN_INTRO_RANK + VERB_MASK*VERB_INTRO_RANK + OTHER_MASK*OTHER_INTRO_RANK + PP_MASK*PP_INTRO_RANK;
+
+input_tokens_sorted_by_type = sort(tokens, ordering_sequence);
+input_noun_mask_sorted = sort(NOUN_TO_INTRODUCE_MASK, ordering_sequence);
+input_verb_mask_sorted = sort(VERB_MASK, ordering_sequence);
+input_pp_mask_sorted = sort(PP_MASK, ordering_sequence);
+input_other_mask_sorted = sort(OTHER_MASK, ordering_sequence);
+input_indices_sorted = sort(indices, ordering_sequence);
+
+pp_in_input_count  = selector_width(select(INPUT_MASK*(indicator(pos_tokens == 2)), 1, ==));
+
+last_AND_or_semicolon_index = aggregate(select(aggregate((select(tokens, "AND", ==) or select(tokens, ";", ==)) and select(indices, indices, >=), 1)-aggregate((select(tokens, "AND", ==) or select(tokens, ";", ==)) and select(indices, indices, >), 1), 1, ==), indices);
+last_separator_index_if_applicable = (last_AND_or_semicolon_index) if nv_uniq_in_output_count > 0 else 0;
+noun_in_input_count = selector_width(select(NOUN_TO_INTRODUCE_MASK, 1, ==));
+cp_common_noun_in_input_count = selector_width(select(NOUN_TO_INTRODUCE_MASK*CP_SEP_BEFORE_ANY_MASK, 1, ==));
+cp_definite_article_common_noun_in_input_count = selector_width(select(DEFINITE_ARTICLE_NOUN_MASK*NOUN_TO_INTRODUCE_MASK*CP_SEP_BEFORE_ANY_MASK, 1, ==));
+
+output_should_not_have_AND_or_semicolon = v_in_output_count + n_in_output_count >= template_size(template_name) - (2 if template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count >= 3 else 0) + noun_in_input_count + cp_verb_in_input_count*2 + pp_in_input_count;
+star_in_output_count_after_last_separator = selector_width(select(star_in_output_sequence, 1, ==) and select(indices, last_separator_index_if_applicable, >));
+num_tokens_in_output_excluding_asterisks_after_last_separator = selector_width(select(tokens_in_output, 1, ==) and select(indices, last_separator_index_if_applicable, >)) - star_in_output_count_after_last_separator;
+cp_agent_count = round(v_in_output_count/2 + 0.01);
+cp_ccomp_count = selector_width(select(OUTPUT_MASK*(indicator(tokens == "ccomp")), 1, ==));
+still_outputting_verb_relationships_offset = -1 if (cp_agent_count - cp_ccomp_count > 0 and v_in_output_count <= cp_verb_in_input_count * 2 + (1 if num_tokens_in_output_excluding_asterisks_after_last_separator > 0 else 0)) else (((-1 + (1 if (template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count == 2) else 0)) if agent_theme_recipient_xcomp_output_count > 0 else 0) if agent_theme_recipient_xcomp_output_count < template_size(template_name) else 0);
+
+target_word_token = aggregate(select(indices, nv_uniq_in_output_count+still_outputting_verb_relationships_offset, ==), normalize_nv(input_tokens_sorted_by_type*(1 - input_other_mask_sorted))) if (not has_star or last_output_is_star) else "*";
+target_word_token_after_idx_0 = aggregate(select(indices, nv_uniq_in_output_count-1, ==), normalize_nv(input_tokens_sorted_by_type*(1- input_other_mask_sorted))) if (not has_star or last_output_is_star) else "*";
+
+target_word_index = aggregate(select(indices, nv_uniq_in_output_count+still_outputting_verb_relationships_offset, ==), input_indices_sorted);
+
+target_word_index_after_idx_0 = aggregate(select(indices, nv_uniq_in_output_count-1, ==), input_indices_sorted);
+is_proper_noun = aggregate(select(indices, target_word_index, ==), pos_tokens) == 8 and not target_word_token == "";
+is_proper_noun_after_idx_0 = aggregate(select(indices, target_word_index_after_idx_0, ==), pos_tokens) == 8 and not target_word_token == "";
+
+relationship_left_index = target_word_index_after_idx_0;
+
+is_verb = aggregate(select(indices, target_word_index, ==), VERB_MASK) == 1;
+is_verb_after_idx_0 = aggregate(select(indices, target_word_index_after_idx_0, ==), VERB_MASK) == 1;
+
+is_noun = aggregate(select(indices, target_word_index, ==), NOUN_MASK) == 1;
+is_noun_after_idx_0 = aggregate(select(indices, target_word_index_after_idx_0, ==), NOUN_MASK) == 1;
+
+is_pp = aggregate(select(indices, target_word_index, ==), PP_MASK) == 1;
+is_pp_after_idx_0 = aggregate(select(indices, target_word_index_after_idx_0, ==), PP_MASK) == 1;
+
+word_before_target_index_in_original_sentence_if_noun = aggregate(select(indices, target_word_index-1, ==), tokens*NOUN_MASK);
+
+template_map_0_based_idx = agent_theme_recipient_xcomp_output_count;
+relationship_label = get_template_mapping(template_name, template_map_0_based_idx);
+relationship_label = "agent" if (template_name == "v_inf_taking" and relationship_label == "v_inf_taking_last_verb_placeholder") else relationship_label;
+
+set example ["a", "boy", "painted", "the", "girl", "|"]
+# noun output block
+output = "";
+output = (target_word_token if is_noun else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 7) == 0) else output;
+output = ("(" if is_noun_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 7) == 1) else output;
+output = ("x" if is_noun_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 7) == 2) else output;
+output = ("_" if is_noun_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 7) == 3) else output;
+output = (target_word_index_after_idx_0 if is_noun_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 7) == 4) else output;
+output = (")" if is_noun_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 7) == 5) else output;
+output = (("" if output_should_not_have_AND_or_semicolon else (";" if has_star_after_idx_0 else "AND")) if is_noun_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 7) == 6) else output;
+
+# verb output block
+output = (target_word_token if is_verb else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 0) else output;
+output = ("." if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 1) else output;
+output = (relationship_label if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 2) else output;
+output = ("(" if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 3) else output;
+output = ("x" if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 4) else output;
+output = ("_" if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 5) else output;
+output = (relationship_left_index if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 6) else output;
+output = ("," if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 7) else output;
+output = ((output if is_right_idx_proper_noun else "x") if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 8) else output;
+output = ((output if is_right_idx_proper_noun else "_") if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == 9) else output;
+output = ((relationship_right_token if is_right_idx_proper_noun else relationship_right_index) if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == (8 if is_right_idx_proper_noun else 10)) else output;
+output = (")" if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == (9 if is_right_idx_proper_noun else 11)) else output;
+
+output = (("" if output_should_not_have_AND_or_semicolon else "AND") if is_verb_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 13) == (10 if is_right_idx_proper_noun else 12)) else output;
+
+# pp output block
+# example of how they are ordered in COGS
+# box ( x _ 3 ) AND box . nmod . on ( x _ 3 , x _ 6 ) AND tree ( x _ 6 )
+#                     0 1    2 3  4 5 6 7 8 9 10111213 14
+output = (normalize_nv(word_before_target_index_in_original_sentence_if_noun) if is_pp else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 0) else output;
+output = ("." if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 1) else output;
+output = ("nmod" if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 2) else output;
+output = ("." if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 3) else output;
+# target_word_token_after_idx_0 will be the preposition at this point
+output = (target_word_token_after_idx_0 if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 4) else output;
+output = ("(" if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 5) else output;
+output = ("x" if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 6) else output;
+output = ("_" if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 7) else output;
+output = ((target_word_index_after_idx_0-1) if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 8) else output;
+output = ("," if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 9) else output;
+output = ((output if is_proper_noun_after_idx_0 else "x") if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 10) else output;
+output = ((output if is_proper_noun_after_idx_0 else "_") if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == 11) else output;
+output = ((right_pp_np_token if is_right_pp_np_idx_proper_noun else right_pp_np_idx) if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == (10 if is_proper_noun_after_idx_0 else 12)) else output;
+output = (")" if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == (11 if is_proper_noun_after_idx_0 else 13)) else output;
+
+output = (("" if output_should_not_have_AND_or_semicolon else "AND") if is_pp_after_idx_0 else output) if ((num_tokens_in_output_excluding_asterisks_after_last_separator % 15) == (12 if is_proper_noun else 14)) else output;
+
+cp_target_noun_index = aggregate(select(nps_without_pp_prefix_indices, cp_in_output_count+1, ==), indices);
+cp_agent_right_idx = cp_target_noun_index; # this is the ith noun where i is the cp index we are on
+cp_target_noun = aggregate(select(indices, cp_agent_right_idx, ==), tokens);
+cp_agent_right_pos = aggregate(select(indices, cp_agent_right_idx, ==), pos_tokens);
+is_cp_right_idx_proper_noun = cp_agent_right_pos == 8; 
+is_cp_right_idx_definite_article = (aggregate(select(indices, cp_agent_right_idx-1, ==), tokens) == "the" or aggregate(select(indices, cp_agent_right_idx-1, ==), tokens) == "The");
+is_cp_noun_not_introduced = is_cp_right_idx_definite_article or is_cp_right_idx_proper_noun;
+
+cp_target_noun_index_after_ccomp = aggregate(select(nps_without_pp_prefix_indices, cp_in_output_count, ==), indices);
+cp_agent_right_idx_after_ccomp = cp_target_noun_index_after_ccomp; # this is the ith noun where i is the cp index we are on
+cp_target_noun_after_ccomp = aggregate(select(indices, cp_agent_right_idx_after_ccomp, ==), tokens);
+cp_agent_right_pos_after_ccomp = aggregate(select(indices, cp_agent_right_idx_after_ccomp, ==), pos_tokens);
+is_cp_right_idx_proper_noun_after_ccomp = cp_agent_right_pos_after_ccomp == 8; 
+is_cp_right_idx_definite_article_after_ccomp = (aggregate(select(indices, cp_agent_right_idx_after_ccomp-1, ==), tokens) == "the" or aggregate(select(indices, cp_agent_right_idx_after_ccomp-1, ==), tokens) == "The");
+is_cp_noun_not_introduced_after_ccomp = is_cp_right_idx_definite_article_after_ccomp or is_cp_right_idx_proper_noun_after_ccomp;
+
+# * noun ( x _ 1 ) ;
+# 1    2 3 4 5 6 7 8
+cp_definite_article_count_offset = definite_article_noun_count*8; # no longer excludes asterisks
+cp_block_num_tokens = 24 + (0 if is_cp_right_idx_proper_noun_after_ccomp else 2) + (0 if is_cp_noun_not_introduced_after_ccomp else 7);
+# note that cp_definite_article_common_noun_in_input_count will be introduced separately
+cp_expected_nv_non_unique_count = cp_common_noun_in_input_count + 2*cp_verb_in_input_count;
+
+# CP handling (COGS)
+# switch to COGS example
+# mean . agent ( x _ 1 , x _ 0 ) AND mean . ccomp ( x _ 1 , x _ 4 ) AND
+#    1 2     3 4 5 6 7 8 9101112  13  14 15   16 171819202122232425  26
+# mean . agent ( x _ 1 , Liam ) AND mean . ccomp ( x _ 1 , x _ 4 ) AND
+#    1 2     3 4 5 6 7 8   9 10  11   12 13  14 1516171819202122 23 24
+# 26 or 24 depending on if the agent noun is a proper noun or not
+
+# need num_tokens_in_output_excluding_asterisks_after_last_separator that splits on "ccomp ( x _ ? , x _ ? ) AND" (note no variation in length since ccomp compares verbs which always have a numerical index)
+last_ccomp_index = aggregate(select(aggregate(select(tokens, "ccomp", ==) and select(indices, indices, >=), 1)-aggregate(select(tokens, "ccomp", ==) and select(indices, indices, >), 1), 1, ==), indices);
+start_of_output_index = length - selector_width(select(tokens_in_output, 1, ==)) - 1;
+before_last_ccomp_index_mask = round(aggregate(select(last_ccomp_index, indices, >), 1));
+last_ccomp_index = last_ccomp_index if last_ccomp_index + 11 <= length else (aggregate(select(aggregate(select(tokens*before_last_ccomp_index_mask, "ccomp", ==) and select(indices, indices, >=), 1)-aggregate(select(tokens*before_last_ccomp_index_mask, "ccomp", ==) and select(indices, indices, >), 1), 1, ==), indices));
+last_post_ccomp_separator_index_if_applicable = (last_ccomp_index + 10) if (last_ccomp_index > 0 and (last_ccomp_index + 11) <= length) else (cp_definite_article_count_offset + start_of_output_index);
+
+star_in_output_count_after_last_post_ccomp_separator = selector_width(select(star_in_output_sequence, 1, ==) and select(indices, last_post_ccomp_separator_index_if_applicable, >));
+num_tokens_in_output_excluding_asterisks_after_last_post_ccomp_separator = selector_width(select(tokens_in_output, 1, ==) and select(indices, last_post_ccomp_separator_index_if_applicable, >)) - star_in_output_count_after_last_post_ccomp_separator;
+
+verb_indices = sort(indices*VERB_MASK, indices + (1-VERB_MASK)*length);
+cp_verb_index = aggregate(select(indices, round(v_in_output_count/2-0.01), ==), verb_indices);
+cp_verb_token = normalize_nv(aggregate(select(indices, cp_verb_index, ==), tokens*(1 - OTHER_MASK)*INPUT_MASK));
+
+expected_cp_ccomp_count = cp_verb_in_input_count;
+expected_cp_agent_count = cp_verb_in_input_count;
+cp_agent_output = "";
+cp_agent_output = cp_verb_token if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 0) else cp_agent_output;
+cp_agent_output = "." if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 1) else cp_agent_output;
+cp_agent_output = "agent" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 2) else cp_agent_output;
+cp_agent_output = "(" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 3) else cp_agent_output;
+
+cp_agent_output = "x" if (((num_tokens_in_output_excluding_asterisks_after_last_separator)) == 4) else cp_agent_output;
+cp_agent_output = "_" if (((num_tokens_in_output_excluding_asterisks_after_last_separator)) == 5) else cp_agent_output;
+cp_agent_left_idx = target_word_index_after_idx_0;
+cp_agent_output = cp_agent_left_idx if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 6) else cp_agent_output;
+cp_agent_output = "," if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 7) else cp_agent_output;
+
+cp_agent_output = (cp_agent_output if is_cp_right_idx_proper_noun else "x") if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 8) else cp_agent_output;
+cp_agent_output = (cp_agent_output if is_cp_right_idx_proper_noun else "_") if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 9) else cp_agent_output;
+cp_agent_output = (cp_target_noun if is_cp_right_idx_proper_noun else cp_agent_right_idx) if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == (8 + (0 if is_cp_right_idx_proper_noun else 2) )) else cp_agent_output;
+cp_agent_output = ")" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == (9 + (0 if is_cp_right_idx_proper_noun else 2) )) else cp_agent_output;
+cp_agent_output = "AND" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == (10 + (0 if is_cp_right_idx_proper_noun else 2) )) else cp_agent_output;
+
+is_verb_adjusted = (num_tokens_in_output_excluding_asterisks_after_last_separator > 0 and is_verb_after_idx_0) or (num_tokens_in_output_excluding_asterisks_after_last_separator == 0 and is_verb);
+output = cp_agent_output if (is_verb_adjusted and (cp_agent_count <= (expected_cp_agent_count))  and (cp_ccomp_count < expected_cp_ccomp_count) and v_in_output_count % 2 == 1 ) else output;
+
+# separate cp_ccomp_output here into a new block
+cp_ccomp_output = "";
+cp_ccomp_output = cp_verb_token if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 0) else cp_ccomp_output;
+cp_ccomp_output = "." if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 1) else cp_ccomp_output;
+cp_ccomp_output = "ccomp" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 2) else cp_ccomp_output;
+cp_ccomp_output = "(" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 3) else cp_ccomp_output;
+cp_ccomp_left_idx = cp_agent_left_idx;
+cp_ccomp_output = "x" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 4) else cp_ccomp_output;
+cp_ccomp_output = "_" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 5) else cp_ccomp_output;
+cp_ccomp_output = cp_ccomp_left_idx if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 6) else cp_ccomp_output;
+cp_ccomp_output = "," if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 7) else cp_ccomp_output;
+cp_ccomp_right_idx = cp_verb_index;
+cp_ccomp_output = "x" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 8) else cp_ccomp_output;
+cp_ccomp_output = "_" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 9) else cp_ccomp_output;
+cp_ccomp_output = cp_ccomp_right_idx if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 10) else cp_ccomp_output;
+cp_ccomp_output = ")" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 11) else cp_ccomp_output;
+cp_ccomp_output = "AND" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 12) else cp_ccomp_output;
+output = cp_ccomp_output if (is_verb_adjusted and v_in_output_count % 2 == 0 and (cp_agent_count <= v_in_output_count and num_tokens_in_output_excluding_asterisks_after_last_separator > 1) and v_in_output_uniq_count <= expected_cp_agent_count and (cp_ccomp_count < expected_cp_ccomp_count or (cp_ccomp_count <= expected_cp_ccomp_count and num_tokens_in_output_excluding_asterisks_after_last_separator >= 3))) else output;
