@@ -315,13 +315,7 @@ CP_SEP_MASK = indicator(pos_tokens == 6)*INPUT_MASK;
 CP_SEP_BEFORE_ANY_MASK = aggregate(select(pos_tokens == 6, 1, ==) and select(indices, indices, >=), 1)*INPUT_MASK; # acausal but limited to input mask (encoder of encoder decoder)
 CP_SEP_AFTER_ALL_MASK = 1 - CP_SEP_BEFORE_ANY_MASK;
 
-ordering_sequence = DEFINITE_ARTICLE_NOUN_MASK*DEFINITE_ARTICLE_NOUN_INTRO_RANK + NOUN_TO_INTRODUCE_MASK*(1 - DEFINITE_ARTICLE_NOUN_MASK)*NOUN_INTRO_RANK + VERB_MASK*VERB_INTRO_RANK + OTHER_MASK*OTHER_INTRO_RANK;
 
-input_tokens_sorted_by_type = sort(tokens, ordering_sequence);
-input_noun_mask_sorted = sort(NOUN_TO_INTRODUCE_MASK, ordering_sequence);
-input_verb_mask_sorted = sort(VERB_MASK, ordering_sequence);
-input_other_mask_sorted = sort(OTHER_MASK, ordering_sequence);
-input_indices_sorted = sort(indices, ordering_sequence);
 
 input_section_idx_includes_spaces = input_section_idx;
 star_in_output_sequence = OUTPUT_MASK*(indicator(tokens == "*"));
@@ -919,17 +913,6 @@ nv_uniq_in_output_count = n_in_output_count + v_in_output_uniq_count;
 
 nv_in_output_count = n_in_output_count + v_in_output_count;
 
-# introducing variables
-output = "";
-# definite article word handling
-before_target_word_index = aggregate(select(indices, nv_uniq_in_output_count, ==), input_indices_sorted)-1;
-has_star = (aggregate(select(indices, before_target_word_index, ==), tokens) == "the") or (aggregate(select(indices, before_target_word_index, ==), tokens) == "The");
-last_output_is_star = aggregate(select(indices, length-1, ==), tokens) == "*";
-before_target_word_index_after_idx_0 = aggregate(select(indices, nv_uniq_in_output_count-1, ==), input_indices_sorted)-1;
-has_star_after_idx_0 = (aggregate(select(indices, before_target_word_index_after_idx_0, ==), tokens) == "the") or (aggregate(select(indices, before_target_word_index_after_idx_0, ==), tokens) == "The");
-
-input_nv_sorted_by_type = input_tokens_sorted_by_type * (input_noun_mask_sorted + input_verb_mask_sorted);
-
 cp_in_input_sequence = CP_SEP_MASK;
 cp_in_input_count = selector_width(select(cp_in_input_sequence, 1, ==));
 cp_in_output_sequence = OUTPUT_MASK*indicator(tokens == "ccomp")*OUTPUT_MASK;
@@ -972,7 +955,9 @@ right_pp_np_token = aggregate(select(indices, right_pp_np_idx, ==), tokens);
 is_right_pp_np_idx_proper_noun = right_pp_np_token == 8;
 
 # points to 2nd verb for xcomp for v_inf_taking_v_inf
-right_idx = aggregate(select(indices, nv_uniq_in_output_count, ==), input_indices_sorted) if (template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count == 2) else right_idx;
+post_cp_verb_indices = selector_width(select(VERB_MASK*CP_SEP_AFTER_ALL_MASK, 1, ==) and select(indices, indices, <=))*VERB_MASK*CP_SEP_AFTER_ALL_MASK;
+second_post_cp_verb_idx = aggregate(select(post_cp_verb_indices, 2, ==), indices);
+right_idx = second_post_cp_verb_idx if (template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count == 2) else right_idx;
 
 # points to 1st noun for 2nd v_inf agent in v_inf_taking_v_inf
 nps_without_pp_prefix_indices_after_cp_one_based = (selector_width(select(CP_SEP_AFTER_ALL_MASK*NOUN_MASK*no_pp_np_mask, 1, ==) and select(indices, indices, <=)))*CP_SEP_AFTER_ALL_MASK*NOUN_MASK*no_pp_np_mask;
@@ -1026,6 +1011,15 @@ num_tokens_in_output_excluding_asterisks_after_last_separator = selector_width(s
 cp_agent_count = round(v_in_output_count/2 + 0.01);
 cp_ccomp_count = selector_width(select(OUTPUT_MASK*(indicator(tokens == "ccomp")), 1, ==));
 still_outputting_verb_relationships_offset = -1 if (cp_agent_count - cp_ccomp_count > 0 and v_in_output_count <= cp_verb_in_input_count * 2 + (1 if num_tokens_in_output_excluding_asterisks_after_last_separator > 0 else 0)) else (((-1 + (1 if (template_name == "v_inf_taking" and agent_theme_recipient_xcomp_output_count == 2) else 0)) if agent_theme_recipient_xcomp_output_count > 0 else 0) if agent_theme_recipient_xcomp_output_count < template_size(template_name) else 0);
+
+# definite article word handling # consider to remove this and replace "has_star" with checking whether noun output count matches/exceeds definite article in input count yet
+#   note this variable is only expected to be used when still_outputting_verb_relationships_offset == 0 (noun output, specifically definite article noun output)
+#   but keeping still_outputting_verb_relationships_offset in the index calculation for consistency
+before_target_word_index = aggregate(select(indices, nv_uniq_in_output_count+still_outputting_verb_relationships_offset, ==), input_indices_sorted)-1;
+has_star = (aggregate(select(indices, before_target_word_index, ==), tokens) == "the") or (aggregate(select(indices, before_target_word_index, ==), tokens) == "The");
+last_output_is_star = aggregate(select(indices, length-1, ==), tokens) == "*";
+before_target_word_index_after_idx_0 = aggregate(select(indices, nv_uniq_in_output_count-1, ==), input_indices_sorted)-1;
+has_star_after_idx_0 = (aggregate(select(indices, before_target_word_index_after_idx_0, ==), tokens) == "the") or (aggregate(select(indices, before_target_word_index_after_idx_0, ==), tokens) == "The");
 
 target_word_token = aggregate(select(indices, nv_uniq_in_output_count+still_outputting_verb_relationships_offset, ==), normalize_nv(input_tokens_sorted_by_type*(1 - input_other_mask_sorted))) if (not has_star or last_output_is_star) else "*";
 target_word_token_after_idx_0 = aggregate(select(indices, nv_uniq_in_output_count-1, ==), normalize_nv(input_tokens_sorted_by_type*(1- input_other_mask_sorted))) if (not has_star or last_output_is_star) else "*";
