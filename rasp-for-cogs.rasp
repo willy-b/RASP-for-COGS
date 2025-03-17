@@ -991,9 +991,6 @@ OTHER_MASK = (1 - NOUN_TO_INTRODUCE_MASK)*(1 - VERB_MASK)*(1 - PP_MASK);
 ordering_sequence = DEFINITE_ARTICLE_NOUN_MASK*DEFINITE_ARTICLE_NOUN_INTRO_RANK + NOUN_TO_INTRODUCE_MASK*(1 - DEFINITE_ARTICLE_NOUN_MASK)*NOUN_INTRO_RANK + VERB_MASK*VERB_INTRO_RANK + OTHER_MASK*OTHER_INTRO_RANK + PP_MASK*PP_INTRO_RANK;
 
 input_tokens_sorted_by_type = sort(tokens, ordering_sequence);
-input_noun_mask_sorted = sort(NOUN_TO_INTRODUCE_MASK, ordering_sequence);
-input_verb_mask_sorted = sort(VERB_MASK, ordering_sequence);
-input_pp_mask_sorted = sort(PP_MASK, ordering_sequence);
 input_other_mask_sorted = sort(OTHER_MASK, ordering_sequence);
 input_indices_sorted = sort(indices, ordering_sequence);
 
@@ -1182,3 +1179,7 @@ cp_ccomp_output = cp_ccomp_right_idx if ((num_tokens_in_output_excluding_asteris
 cp_ccomp_output = ")" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 11) else cp_ccomp_output;
 cp_ccomp_output = "AND" if ((num_tokens_in_output_excluding_asterisks_after_last_separator) == 12) else cp_ccomp_output;
 output = cp_ccomp_output if (is_verb_adjusted and v_in_output_count % 2 == 0 and (cp_agent_count <= v_in_output_count and num_tokens_in_output_excluding_asterisks_after_last_separator > 1) and v_in_output_uniq_count <= expected_cp_agent_count and (cp_ccomp_count < expected_cp_ccomp_count or (cp_ccomp_count <= expected_cp_ccomp_count and num_tokens_in_output_excluding_asterisks_after_last_separator >= 3))) else output;
+# the associated python runner script adds a pipe already
+# but in case someone runs the RASP by hand,
+# remind them they should add the input/output separator
+output = "|" if num_pipes_in_output == 0 else output;
