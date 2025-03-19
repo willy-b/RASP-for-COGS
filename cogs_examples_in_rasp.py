@@ -84,8 +84,12 @@ while (batch_idx+1)*5 < len(input_lines) + 5:
   stdin_handle.writelines(lines_to_write)
   stdin_handle.flush()
   stdout_handle.flush()
-  outputlines = stdout_handle.readlines()
-  #print(f"output: {outputlines}")
+  outputlines = []
+  while len(outputlines) == 0:
+    outputlines = stdout_handle.readlines() # on some dependency versions
+    # there is some delay before RASP process responds, this avoids flooding it with RASP input 
+    # before it is ready  
+  print(f"loading RASP into RASP interpreter: {outputlines}")
   batch_idx += 1
 
 running_scores_logfile_handle = open("cogs_examples_in_rasp_running_scores.log", "w")
