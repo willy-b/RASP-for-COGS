@@ -83,7 +83,6 @@ while (batch_idx+1)*5 < len(input_lines) + 5:
   #print(lines_to_write)
   stdin_handle.writelines(lines_to_write)
   stdin_handle.flush()
-  stdout_handle.flush()
   outputlines = []
   while len(outputlines) == 0:
     outputlines = stdout_handle.readlines() # on some dependency versions
