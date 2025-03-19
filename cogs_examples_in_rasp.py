@@ -88,7 +88,7 @@ while (batch_idx+1)*5 < len(input_lines) + 5:
     outputlines = stdout_handle.readlines() # on some dependency versions
     # there is some delay before RASP process responds, this avoids flooding it with RASP input 
     # before it is ready  
-  print(f"loading RASP into RASP interpreter: {outputlines}")
+  print(f"loading RASP base program into RASP interpreter: {outputlines}")
   batch_idx += 1
 
 running_scores_logfile_handle = open("cogs_examples_in_rasp_running_scores.log", "w")
@@ -101,6 +101,8 @@ stdin_handle.flush()
 outputline = stdout_handle.readline()
 while outputline.find("Example: autoregressive_output") < 0:
   outputline = stdout_handle.readline()
+  if len(outputline.strip()) > 0:
+    print(f"loading RASP base program into RASP interpreter: {outputline}")
 
 def process_example(example, suppress_output=True, debug_mode=False):
   current_example = example.split(" ")
