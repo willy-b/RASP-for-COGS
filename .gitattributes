@@ -1,0 +1,4 @@
+*.pdf linguist-generated
+*.html linguist-generated
+*.ipynb linguist-documentation
+*.svg -linguist-detectable
