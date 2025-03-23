@@ -340,8 +340,6 @@ v_in_output_sequence = OUTPUT_MASK*(indicator(pos_tokens_vmap1 == 9 or pos_token
 n_in_output_sequence = OUTPUT_MASK*(indicator(pos_tokens == 7));
 v_in_output_count = selector_width(select(v_in_output_sequence, 1, ==));
 n_in_output_count = selector_width(select(n_in_output_sequence, 1, ==));
-# count ";" to count fully introduced definite article nouns
-definite_article_noun_in_output_count = selector_width(select(OUTPUT_MASK*(indicator(tokens == ";")), 1, ==));
 
 def template_size(template_name) {
   template_sizes = {
@@ -913,8 +911,6 @@ cp_verb_in_input_count = selector_width(select(VERB_MASK*CP_SEP_BEFORE_ANY_MASK,
 v_in_output_uniq_count = round(v_in_output_count/2 + 0.01) if (v_in_output_count <= 2*cp_verb_in_input_count) else (cp_verb_in_input_count + 1 + (1 if (v_in_output_count - 2*cp_verb_in_input_count) > (2 if (template_name == "v_inf_taking") else template_size(template_name)) else 0));
 nv_uniq_in_output_count = n_in_output_count + v_in_output_uniq_count;
 
-nv_in_output_count = n_in_output_count + v_in_output_count;
-
 cp_in_input_sequence = CP_SEP_MASK;
 cp_in_input_count = selector_width(select(cp_in_input_sequence, 1, ==));
 cp_in_output_sequence = OUTPUT_MASK*indicator(tokens == "ccomp")*OUTPUT_MASK;
@@ -945,8 +941,11 @@ nps_without_pp_prefix_indices = selector_width(select(NOUN_MASK*no_pp_np_mask, 1
 
 # for COGS instead of ReCOGS,
 # we cannot subtract the nv_in_input_count here
-# since nouns are no longer introduced before verbs (still adapting this to COGS)
+# since nouns are no longer introduced before verbs (in COGS vs ReCOGS).
 # note there is an implicit +1 here since this is only used after the current relationship is output, so it is a 1-based index at time of use
+# np_idx only needs agent,theme,recipient (not xcomp)
+# but this cannot be output after xcomp is in output, so reuse existing variable
+# note agent_theme_recipient_xcomp_output_count comes with cp_in_output_count pre-subtracted, so have to add it again
 np_idx = agent_theme_recipient_xcomp_output_count;
 right_idx = aggregate(select(nps_without_pp_prefix_indices, np_idx+cp_in_output_count, ==), indices);
 
@@ -971,9 +970,6 @@ is_right_idx_proper_noun = right_pos == 8 and not (template_name == "v_inf_takin
 
 relationship_right_index = right_idx;
 relationship_right_token = right_token;
-
-# noting that n_in_output_count excludes proper nouns as in COGS they are not introduced
-first_verb_in_output_if_on_verb_offset = -7*n_in_output_count;
 
 pps_in_input_sequence = INPUT_MASK*(indicator(pos_tokens == 2));
 pps_in_input_count = selector_width(select(pps_in_input_sequence, 1, ==));
