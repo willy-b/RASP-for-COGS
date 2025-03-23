@@ -196,41 +196,40 @@ def get_percentages_with_ci_groupby_binary_data(df, groupby_key, alpha=0.05, pri
 optional_cp_filter = "grep 'that' |" if args.cp_examples_only else ""
 filename = None
 if score_on_train_sample:
-  print("Now load official Wu et al 2023 copy of Kim Linzen 2020 COGS training examples\n(sample from https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/train.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 and https://arxiv.org/abs/2303.13716 )")
+  print("Now load official Kim Linzen 2020 COGS training examples\n(sample from https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/train.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 )")
   filename = "train_in_distribution_no_augmentations.tsv"
-  # one of official author's datasets for COGS paper as reposted by Wu et al 2023 in their ReCOGS project
-  subprocess.run("wget https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/train.tsv", shell=True)
+  subprocess.run("wget https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/train.tsv", shell=True)
   subprocess.run(f"echo 'COGS Sentence	COGS Logical Form	Distribution' > {filename}", shell=True)
   subprocess.run(f"cat train.tsv | grep 'in_distribution' | {optional_cp_filter} grep -v 'sprinkle' >> {filename}", shell=True)
 else:
   if args.use_dev_split:
     print("Using dev split, the `num_train_examples_to_check` argument will be ignored")
-    print("Now load official Wu et al 2023 copy of Kim Linzen 2020 COGS dev split\n(https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/dev.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 and https://arxiv.org/abs/2303.13716 )")
+    print("Now load official Kim Linzen 2020 COGS dev split\n(https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/dev.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 )")
     filename = "dev_with_header.tsv"
     # one of official author's datasets for COGS paper
-    subprocess.run("wget https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/dev.tsv", shell=True)
+    subprocess.run("wget https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/dev.tsv", shell=True)
     subprocess.run(f"echo 'COGS Sentence	COGS Logical Form	Distribution' > {filename}", shell=True)
     if len(optional_cp_filter) > 0:
       optional_cp_filter = f"| {optional_cp_filter}"
     subprocess.run(f"cat dev.tsv {optional_cp_filter} >> {filename}", shell=True)
   elif args.use_test_split:
     print("Using test split, the `num_train_examples_to_check` argument will be ignored")
-    print("Now load official Wu et al 2023 copy of Kim Linzen 2020 COGS test split\n(https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/test.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 and https://arxiv.org/abs/2303.13716 )")
+    print("Now load official Kim Linzen 2020 COGS test split\n(https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/test.tsv , associated with https://aclanthology.org/2020.emnlp-main.731)")
     filename = "test_with_header.tsv"
     if len(optional_cp_filter) > 0:
       optional_cp_filter = f"| {optional_cp_filter}"
     # one of official author's dataset for COGS paper
     raise Exception("should not test yet as in development")
-    subprocess.run("wget https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/test.tsv", shell=True)
+    subprocess.run("wget https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/test.tsv", shell=True)
     subprocess.run(f"echo 'COGS Sentence	COGS Logical Form	Distribution' > {filename}", shell=True)
     subprocess.run(f"cat test.tsv {optional_cp_filter} >> {filename}", shell=True)
   elif args.use_gen_split:
     print("Using gen split, the `num_train_examples_to_check` argument will be ignored")
-    print("Now load official Wu et al 2023 copy of Kim Linzen 2020 COGS gen split\n(https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/gen.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 and https://arxiv.org/abs/2303.13716 )")
+    print("Now load official Kim Linzen 2020 COGS gen split\n(https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/gen.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 )")
     raise Exception("should not check gen yet as in development")
     filename = "gen_only_pp_recursion.tsv" if args.do_pp_recursion_gen_split else ("gen_only_cp_recursion.tsv" if args.do_cp_recursion_gen_split else "gen_no_pp_or_cp_recursion.tsv")
     # one of official author's dataset for COGS paper
-    subprocess.run("wget https://raw.githubusercontent.com/frankaging/ReCOGS/1b6eca8ff4dca5fd2fb284a7d470998af5083beb/cogs/gen.tsv", shell=True)
+    subprocess.run("wget https://raw.githubusercontent.com/najoungkim/COGS/86c9be5929c3b86b510afdfe56a4df9d5d341ab9/data/gen.tsv", shell=True)
     subprocess.run(f"echo 'COGS Sentence	COGS Logical Form	Distribution' > {filename}", shell=True)
     if not args.do_pp_recursion_gen_split and not args.do_cp_recursion_gen_split:
       print("Note pp recursion and cp recursion splits (which are slow) are left out by default, run `--do_pp_recursion_gen_split` or `--do_cp_recursion_gen_split` to score one of those at a time separately (they are supported)")
