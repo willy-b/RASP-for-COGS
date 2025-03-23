@@ -219,14 +219,12 @@ else:
     if len(optional_cp_filter) > 0:
       optional_cp_filter = f"| {optional_cp_filter}"
     # one of official author's dataset for COGS paper
-    raise Exception("should not test yet as in development")
     subprocess.run("wget https://raw.githubusercontent.com/najoungkim/COGS/165a7b669eade971fa47bf568a2e51925360fed8/data/test.tsv", shell=True)
     subprocess.run(f"echo 'COGS Sentence	COGS Logical Form	Distribution' > {filename}", shell=True)
     subprocess.run(f"cat test.tsv {optional_cp_filter} >> {filename}", shell=True)
   elif args.use_gen_split:
     print("Using gen split, the `num_train_examples_to_check` argument will be ignored")
     print("Now load official Kim Linzen 2020 COGS gen split\n(https://raw.githubusercontent.com/najoungkim/COGS/165a7b669eade971fa47bf568a2e51925360fed8/data/gen.tsv , associated with https://aclanthology.org/2020.emnlp-main.731 )")
-    raise Exception("should not check gen yet as in development")
     filename = "gen_only_pp_recursion.tsv" if args.do_pp_recursion_gen_split else ("gen_only_cp_recursion.tsv" if args.do_cp_recursion_gen_split else "gen_no_pp_or_cp_recursion.tsv")
     # one of official author's dataset for COGS paper
     subprocess.run("wget https://raw.githubusercontent.com/najoungkim/COGS/165a7b669eade971fa47bf568a2e51925360fed8/data/gen.tsv", shell=True)
