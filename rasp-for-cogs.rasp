@@ -9,7 +9,7 @@
 # This is an academic exercise, writing a neural network compatible program by hand in the Restricted Access Sequence Processing (compilable to Transformer) language (Weiss et al 2021, https://arxiv.org/abs/2106.06981 )
 # to prove a Transformer can perform a particular type of solution (a systematic and compositional solution, unrolling recursive grammar using the decoder loop).
 
-# See cogs_examples_in_rasp.py for a way to run this. Alteratively use the RASP interpreter REPL to run it line by line and see the output.
+# See cogs_examples_in_rasp.py for a way to run this. Alternatively use the RASP interpreter REPL to run it line by line and see the output.
 
 # We want to show a Transformer can solve the structural generalization splits of the "COGS: A Compositional Generalization Challenge Based on Semantic Interpretation"
 # (Kim and Linzen 2020, https://aclanthology.org/2020.emnlp-main.731 ) task (though this is written without reference to that material based on train.tsv and we won't know how it does on those until the end).
@@ -645,7 +645,6 @@ np_det_left_mask = select(np_det_sequence, 1, ==) and select(indices-1, indices,
 np_det_left_sequence = aggregate(np_det_left_mask, 1);
 np_det_left_mask = select(np_det_left_sequence, 1, ==) and select(indices, indices, ==);
 np_pp_iobj_sequence = aggregate((np_prop_mask and pp_iobj_before_mask) or (np_det_left_mask and pp_iobj_two_before_mask), 1.0);
-# TODO replace this with strict handling of prepositional phrase chains in np_v_dat_p_np_pp_iobj
 any_np_pp_iobj_before_mask = select(np_pp_iobj_sequence, 1, ==) and select(indices, indices, >);
 any_np_pp_iobj_before_sequence = aggregate(any_np_pp_iobj_before_mask, 1);
 any_np_pp_iobj_before_mask = select(any_np_pp_iobj_before_sequence, 1, ==) and select(indices, indices, ==);
