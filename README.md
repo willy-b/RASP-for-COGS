@@ -4,7 +4,11 @@ To support Kim and Linzen 2020's original COGS format ( https://aclanthology.org
 
 To try this out, run `python cogs_examples_in_rasp.py`!
 
-Evaluation on test and evaluation on gen sets are disabled for now as this is still development phase but the provided script `cogs_examples_in_rasp.py` can be used to evaluate on training or dev set data.
+`cogs_examples_in_rasp.py` can be used to evaluate on training data (default, use `--num_train_examples_to_check` to adjust the number of examples evaluated) 
+
+or dev set data (`--use_dev_split`), 
+
+or run a real test/gen evaluation (`--use_test_split`, `--use_gen_split`).
 
 Context:
 It is simpler and runs faster to just train a Transformer on examples!
@@ -22,3 +26,49 @@ See also our finished RASP solution to the semantically equivalent ReCOGS task (
 with draft paper for the ReCOGS solution at https://raw.githubusercontent.com/willy-b/RASP-for-ReCOGS/main/rasp-for-recogs_pos-wbruns-2024-draft.pdf for context on this work.
 
 Note this work is focused on structural generalization, not lexical generalization.
+
+## Results
+
+Test set results: `99.97% or 2999 out of 3000 string exact match (95% confidence interval: 99.81% to 100.00%)` 
+
+(upper bound is less than 100% but greater than or equal to 99.995%, as 1 missed in 3000 could be consistent with an error rate less than or equal to 1 in 20,000 (99.995% exact match accuracy or better) within 95% confidence). 
+
+Generalization split results (results are in for all splits except cp_recursion, pp_recursion, which are still evaluating):
+```
+Exact match score on first 19000 of COGS gen:
+
+99.96% or 18993.0 out of 19000 (95% confidence interval: 99.92% to 99.99%)
+
+Exact Match % by category:
+active_to_passive: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+do_dative_to_pp_dative: 99.90% (95.00% confidence interval: 99.44% to 100.00% (999.0 out of 1000))
+obj_omitted_transitive_to_transitive: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+obj_pp_to_subj_pp: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+obj_to_subj_common: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+obj_to_subj_proper: 99.90% (95.00% confidence interval: 99.44% to 100.00% (999.0 out of 1000))
+only_seen_as_transitive_subj_as_unacc_subj: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+only_seen_as_unacc_subj_as_obj_omitted_transitive_subj: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+only_seen_as_unacc_subj_as_unerg_subj: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+passive_to_active: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+pp_dative_to_do_dative: 99.90% (95.00% confidence interval: 99.44% to 100.00% (999.0 out of 1000))
+prim_to_inf_arg: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+prim_to_obj_common: 99.80% (95.00% confidence interval: 99.28% to 99.98% (998.0 out of 1000))
+prim_to_obj_proper: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+prim_to_subj_common: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+prim_to_subj_proper: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+subj_to_obj_common: 99.80% (95.00% confidence interval: 99.28% to 99.98% (998.0 out of 1000))
+subj_to_obj_proper: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+unacc_to_transitive: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+
+[skip multiple blank lines]
+
+Exact Match score on first 19000 of COGS gen:
+
+99.96315789473684% or 18993.0 out of 19000 (95% confidence interval: 99.92% to 99.99%)
+```
+
+Note that the main structural generalization split of interest (was a focus of the separate RASP-for-ReCOGS paper in the ReCOGS variant of COGS), obj_pp_to_subj_pp , had 100% string exact match performance:
+```
+obj_pp_to_subj_pp: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+```
+
