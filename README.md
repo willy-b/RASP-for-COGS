@@ -71,4 +71,11 @@ Note that the main structural generalization split of interest (was a focus of t
 ```
 obj_pp_to_subj_pp: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
 ```
+### Recursive generalization split evaluations are in progress (reporting partial results below)
 
+Sentential complement recursion (cp_recursion) and prepositional phrase recursion (pp_recursion) splits (scores on trials completed so far, out of n=1000 total for each split):
+```
+Exact Match % by category (so far):
+cp_recursion: 100.00% (95.00% confidence interval: 98.39% to 100.00% (227.0 out of 227))
+pp_recursion: 99.06% (95.00% confidence interval: 97.60% to 99.74% (420.0 out of 424))
+```
