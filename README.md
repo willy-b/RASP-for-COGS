@@ -23,7 +23,7 @@ to prove a Transformer can perform a particular type of solution (building a sys
 
 See also our finished RASP solution to the semantically equivalent ReCOGS task (Wu et al 2023, "ReCOGS: How Incidental Details of a Logical Form Overshadow an Evaluation of Semantic Interpretation", https://arxiv.org/abs/2303.13716) at https://github.com/willy-b/learning-rasp/blob/main/word-level-pos-tokens-recogs-style-decoder-loop.rasp 
 
-with draft paper for the ReCOGS solution at https://raw.githubusercontent.com/willy-b/RASP-for-ReCOGS/main/rasp-for-recogs_pos-wbruns-2024-draft.pdf for context on this work.
+with preprint of paper for the ReCOGS solution at https://arxiv.org/abs/2504.15349 (or https://raw.githubusercontent.com/willy-b/RASP-for-ReCOGS/main/rasp-for-recogs_pos-wbruns-2024-draft.pdf ) for context on this work.
 
 Note this work is focused on structural generalization, not lexical generalization.
 
