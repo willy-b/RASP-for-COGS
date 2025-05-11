@@ -1,5 +1,7 @@
 # RASP-for-COGS
 
+![](rasp-for-cogs-decoder-loop-figure-incl-encoder-and-decoder.png)
+
 To support Kim and Linzen 2020's original COGS format ( https://aclanthology.org/2020.emnlp-main.731/ ) (vs the simplified and semantically equivalent ReCOGS from Wu et al 2023, which we built a model for earlier in RASP described at https://github.com/willy-b/RASP-for-ReCOGS ).
 
 To try this out, run `python cogs_examples_in_rasp.py`!
