@@ -1,7 +1,5 @@
 # RASP-for-COGS
 
-![](rasp-for-cogs-decoder-loop-figure-incl-encoder-and-decoder.png)
-
 To support Kim and Linzen 2020's original COGS format ( https://aclanthology.org/2020.emnlp-main.731/ ) (vs the simplified and semantically equivalent ReCOGS from Wu et al 2023, which we built a model for earlier in RASP described at https://github.com/willy-b/RASP-for-ReCOGS ).
 
 To try this out, run `python cogs_examples_in_rasp.py`!
@@ -81,3 +79,7 @@ Exact Match % by category (so far):
 cp_recursion: 100.00% (95.00% confidence interval: 98.39% to 100.00% (227.0 out of 227))
 pp_recursion: 99.06% (95.00% confidence interval: 97.60% to 99.74% (420.0 out of 424))
 ```
+
+## RASP-for-COGS Encoder-Decoder Schematic (simplified)
+
+![](rasp-for-cogs-decoder-loop-figure-incl-encoder-and-decoder.png)
