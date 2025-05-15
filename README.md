@@ -79,3 +79,7 @@ Exact Match % by category (so far):
 cp_recursion: 100.00% (95.00% confidence interval: 98.39% to 100.00% (227.0 out of 227))
 pp_recursion: 99.06% (95.00% confidence interval: 97.60% to 99.74% (420.0 out of 424))
 ```
+
+## RASP-for-COGS Encoder-Decoder Schematic (simplified)
+
+![](rasp-for-cogs-decoder-loop-figure-incl-encoder-and-decoder.png)
