@@ -29,11 +29,25 @@ Note this work is focused on structural generalization, not lexical generalizati
 
 ## Results
 
-Test set results: `99.97% or 2999 out of 3000 string exact match (95% confidence interval: 99.81% to 100.00%)` 
+**Test set results:** `99.97% or 2999 out of 3000 string exact match (95% confidence interval: 99.81% to 100.00%)` 
 
 (upper bound is less than 100% but greater than or equal to 99.995%, as 1 missed in 3000 could be consistent with an error rate less than or equal to 1 in 20,000 (99.995% exact match accuracy or better) within 95% confidence). 
 
-Generalization split results (results are in for all splits except cp_recursion, pp_recursion, which are still evaluating):
+**Generalization split results** (results are in for all splits except cp_recursion, which is still evaluating).
+
+The focus of this work is on structural generalizations, especially those involving the recursive, potentially center-embedding prepositional phrases.
+
+We find that **the main structural generalization split of interest** (was a focus of the separate RASP-for-ReCOGS paper in the ReCOGS variant of COGS), **obj_pp_to_subj_pp , had 100% string exact match performance**:
+```
+obj_pp_to_subj_pp: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
+```
+
+The other main structural generalization split, **prepositional phrase recursion also had strong performance (98.40% string exact match), despite RASP-for-COGS lacking any support for recursive rules or hierarchical representation** (just unrolling recursion in the decoder loop):
+```
+pp_recursion: 98.40% (95.00% confidence interval: 97.41% to 99.08% (984.0 out of 1000))
+```
+
+The other complete generalization splits for non-recursive parts of the COGS grammar are given below:
 ```
 Exact match score on first 19000 of COGS gen:
 
@@ -67,17 +81,11 @@ Exact Match score on first 19000 of COGS gen:
 99.96315789473684% or 18993.0 out of 19000 (95% confidence interval: 99.92% to 99.99%)
 ```
 
-Note that the main structural generalization split of interest (was a focus of the separate RASP-for-ReCOGS paper in the ReCOGS variant of COGS), obj_pp_to_subj_pp , had 100% string exact match performance:
-```
-obj_pp_to_subj_pp: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
-```
-
-Sentential complement recursion (cp_recursion) and prepositional phrase recursion (pp_recursion) splits are still being evaluated.
-Here are the scores on the trials completed so far, out of what will be n=1000 total for each split:
+Lastly, the third and final structural generalization split, the sentential complement recursion (cp_recursion) split, alone is still being evaluated, but also has strong performance so far.
+Here are the scores on the trials completed so far, out of what will be n=1000 total for the split:
 ```
 Exact Match % by category (so far):
-cp_recursion: 100.00% (95.00% confidence interval: 98.39% to 100.00% (227.0 out of 227))
-pp_recursion: 99.06% (95.00% confidence interval: 97.60% to 99.74% (420.0 out of 424))
+cp_recursion: 99.85% (95.00% confidence interval: 99.15% to 100.00% (651.0 out of 652))
 ```
 
 ## RASP-for-COGS Encoder-Decoder Schematic (simplified)
