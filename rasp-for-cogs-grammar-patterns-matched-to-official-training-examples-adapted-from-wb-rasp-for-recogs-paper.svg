@@ -9,6 +9,9 @@
    id="svg1"
    inkscape:version="1.4 (e7c3feb100, 2024-10-09)"
    sodipodi:docname="rasp-for-cogs-grammar-patterns-matched-to-official-training-examples-adapted-from-wb-rasp-for-recogs-paper.svg"
+   inkscape:export-filename="rasp-for-cogs-grammar-patterns-matched-to-official-training-examples-adapted-from-wb-rasp-for-recogs-paper.png"
+   inkscape:export-xdpi="192"
+   inkscape:export-ydpi="192"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
@@ -23,15 +26,15 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="2.4831765"
-     inkscape:cx="130.47804"
-     inkscape:cy="695.68152"
+     inkscape:zoom="0.98102501"
+     inkscape:cx="237.50669"
+     inkscape:cy="231.90031"
      inkscape:window-width="1670"
      inkscape:window-height="970"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g1723" />
+     inkscape:current-layer="layer1" />
   <defs
      id="defs1">
     <rect
@@ -45,6 +48,13 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1">
+    <rect
+       style="fill:#ffffff;stroke-width:0.264583"
+       id="rect2"
+       width="82"
+       height="270"
+       x="-0.53940183"
+       y="-0.26970091" />
     <rect
        style="fill:#ffffff;stroke-width:0.326532"
        id="rect7"
@@ -348,24 +358,24 @@
        id="text2"><tspan
          x="1.6805593"
          y="234.62973"
-         id="tspan2">Table 1: 19 flat part of speech / verb </tspan><tspan
+         id="tspan1">Table 1: 19 flat part of speech / verb </tspan><tspan
          x="1.6805593"
          y="239.92138"
-         id="tspan9">type patterns (matched by Encoder, </tspan><tspan
+         id="tspan3">type patterns (matched by Encoder, </tspan><tspan
          x="1.6805593"
          y="245.21304"
-         id="tspan10">Figure 1) derived from training </tspan><tspan
+         id="tspan4">Figure 1) derived from training </tspan><tspan
          x="1.6805593"
          y="250.50469"
-         id="tspan11">examples are sufficient to cover the </tspan><tspan
+         id="tspan5">examples are sufficient to cover the </tspan><tspan
          x="1.6805593"
          y="255.79635"
-         id="tspan12">COGS input grammar after pp/cp </tspan><tspan
+         id="tspan6">COGS input grammar after pp/cp </tspan><tspan
          x="1.6805593"
          y="261.08801"
-         id="tspan13">masking to obtain noun-verb </tspan><tspan
+         id="tspan7">masking to obtain noun-verb </tspan><tspan
          x="1.6805593"
          y="266.37966"
-         id="tspan14">relationship ordering for the main verb.</tspan></text>
+         id="tspan8">relationship ordering for the main verb.</tspan></text>
   </g>
 </svg>

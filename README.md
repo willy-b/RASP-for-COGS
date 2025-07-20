@@ -92,4 +92,4 @@ cp_recursion: 99.85% (95.00% confidence interval: 99.15% to 100.00% (651.0 out o
 
 ![](rasp-for-cogs-decoder-loop-figure-incl-encoder-and-decoder.png)
 
-![](rasp-for-cogs-grammar-patterns-matched-to-official-training-examples-adapted-from-wb-rasp-for-recogs-paper.png)
+![](rasp-for-cogs-grammar-patterns-matched-to-official-training-examples-adapted-from-wb-rasp-for-recogs-paper.svg)
