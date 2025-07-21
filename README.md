@@ -91,3 +91,9 @@ cp_recursion: 99.85% (95.00% confidence interval: 99.15% to 100.00% (651.0 out o
 ## RASP-for-COGS Encoder-Decoder Schematic (simplified)
 
 ![](rasp-for-cogs-decoder-loop-figure-incl-encoder-and-decoder.png)
+
+And Table 1 showing the 19 grammar patterns used above for noun-verb relationship ordering templates associated with specific official COGS training examples (of many examples of each in the training set), as well as the first center embedded prepositional phrase official COGS training example that motivates pp masking (of many):
+
+![](rasp-for-cogs-grammar-patterns-matched-to-official-training-examples-adapted-from-wb-rasp-for-recogs-paper.svg)
+
+Note the number, 19, of the grammar patterns coincidentally matches the number of non-recursive generalization splits but that is a coincidence and these are not derived from generalization set data (see examples in the Table).
