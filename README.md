@@ -106,6 +106,9 @@ And Table 1 showing the 19 grammar patterns used above for noun-verb relationshi
 
 Note the number, 19, of the grammar patterns coincidentally matches the number of non-recursive generalization splits but that is a coincidence and these are not derived from generalization set data (see examples in the Table).
 
+Any non-standard sentences mentioned in our RASP model code (only to demonstrate, not functionally important) are shown below to be equivalent to official COGS (also in ReCOGS) training examples:
+
+![](custom-sentences-mentioned-in-rasp-file-are-equivalent-to-official-training-examples.svg)
 
 ## Intended use and warnings
 
