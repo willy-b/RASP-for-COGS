@@ -41,7 +41,7 @@ We use (Weiss et al., 2021; https://proceedings.mlr.press/v139/weiss21a.html )â€
 
 Note: The RASP-for-COGS confidence intervals are Clopper-Pearson confidence intervals ( https://en.wikipedia.org/w/index.php?title=Binomial_proportion_confidence_interval&oldid=1252517214#Clopper%E2%80%93Pearson_interval ) which handle well the confidence intervals expected for the performance of a deterministic program to be evaluated on future samples from the same distribution even if no errors were observed yet (in which case the confidence interval just depends on the number of samples; bootstrapping would not have any uncertainty if no errors were observed yet). The upper bound here is less than 100% but greater than or equal to 99.995%, as 1 missed in 3000 could be consistent with an error rate less than or equal to 1 in 20,000 (99.995% exact match accuracy or better) within 95% confidence.
 
-**Generalization split results** (results are in for all splits except cp_recursion, which is still evaluating).
+**Generalization split results:**
 
 The focus of this work is on structural generalizations, especially those involving the recursive, potentially center-embedding prepositional phrases.
 
@@ -50,12 +50,13 @@ We find that **the main structural generalization split of interest** (was a foc
 obj_pp_to_subj_pp: 100.00% (95.00% confidence interval: 99.63% to 100.00% (1000.0 out of 1000))
 ```
 
-The other main structural generalization split, **prepositional phrase recursion also had strong performance (98.40% string exact match), despite RASP-for-COGS lacking any support for recursive rules or hierarchical representation** (just unrolling recursion in the decoder loop):
+The other main structural generalization splits, **prepositional phrase (pp) and sentential complement (cp) recursion also had strong performance (98.40% string exact match and 99.90% string exact match respectively, see below), despite RASP-for-COGS lacking any support for recursive rules or hierarchical representations** (just unrolling recursion in the decoder loop):
 ```
 pp_recursion: 98.40% (95.00% confidence interval: 97.41% to 99.08% (984.0 out of 1000))
+cp_recursion: 99.90% (95.00% confidence interval: 99.44% to 100.00% (999.0 out of 1000))
 ```
 
-The other complete generalization splits for non-recursive parts of the COGS grammar are given below:
+The other generalization splits for non-recursive parts of the COGS grammar are given below:
 ```
 Exact match score on first 19000 of COGS gen:
 
@@ -87,13 +88,6 @@ unacc_to_transitive: 100.00% (95.00% confidence interval: 99.63% to 100.00% (100
 Exact Match score on first 19000 of COGS gen:
 
 99.96315789473684% or 18993.0 out of 19000 (95% confidence interval: 99.92% to 99.99%)
-```
-
-Lastly, the third and final structural generalization split, the sentential complement recursion (cp_recursion) split, alone is still being evaluated, but also has strong performance so far.
-Here are the scores on the trials completed so far, out of what will be n=1000 total for the split:
-```
-Exact Match % by category (so far):
-cp_recursion: 99.85% (95.00% confidence interval: 99.15% to 100.00% (651.0 out of 652))
 ```
 
 ## RASP-for-COGS Encoder-Decoder Schematic (simplified)
