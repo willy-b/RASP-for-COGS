@@ -1,4 +1,4 @@
-# THIS IS SEPARATE FROM RASP-for-ReCOGS which was solved earlier, separately, see https://github.com/willy-b/learning-rasp/blob/main/word-level-pos-tokens-recogs-style-decoder-loop.rasp and the draft paper for the ReCOGS solution at https://raw.githubusercontent.com/willy-b/RASP-for-ReCOGS/main/rasp-for-recogs_pos-wbruns-2024-draft.pdf .
+# THIS IS SEPARATE FROM RASP-for-ReCOGS which was solved earlier, separately, see _/learning-rasp/blob/main/word-level-pos-tokens-recogs-style-decoder-loop.rasp and the draft paper for the ReCOGS solution at _/RASP-for-ReCOGS/main/rasp-for-recogs_pos-_-2024-draft.pdf .
 
 # A solution for the "COGS: A Compositional Generalization Challenge Based on Semantic Interpretation"
 # (Kim and Linzen 2020, https://aclanthology.org/2020.emnlp-main.731 ) task is being worked on here.
@@ -16,7 +16,7 @@
 
 # (We made use of the convenient summary of Kim, Linzen's COGS task grammar and vocab made by IBM's CPG project (their utilities, not their CPG project itself) at https://github.com/IBM/cpg/blob/c3626b4e03bfc681be2c2a5b23da0b48abe6f570/src/model/cogs_data.py#L523 )
 
-# See also our finished RASP solution to the semantically equivalent ReCOGS task (Wu et al 2023, "ReCOGS: How Incidental Details of a Logical Form Overshadow an Evaluation of Semantic Interpretation", linked from the  draft paper at https://raw.githubusercontent.com/willy-b/RASP-for-ReCOGS/main/rasp-for-recogs_pos-wbruns-2024-draft.pdf ).
+# See also our finished RASP solution to the semantically equivalent ReCOGS task (Wu et al 2023, "ReCOGS: How Incidental Details of a Logical Form Overshadow an Evaluation of Semantic Interpretation", linked from the  draft paper at _/RASP-for-ReCOGS/main/rasp-for-recogs_pos-_-2024-draft.pdf ).
 
 set example ["a","boy","painted","the","girl"]
 
@@ -470,7 +470,7 @@ return template_mapping1[template_name] if idx == 0 else (template_mapping2[temp
 }
 
 # BEGIN SHARED BLOCK WITH RASP-for-RECOGS (encoder) (my code, owned by me)
-# https://github.com/willy-b/learning-rasp/blob/9f69ba43dc39373ffb378946bd2c89d303417dae/word-level-pos-tokens-recogs-style-decoder-loop.rasp#L308C1-L669C19
+# _/learning-rasp/blob/9f69ba43dc39373ffb378946bd2c89d303417dae/word-level-pos-tokens-recogs-style-decoder-loop.rasp#L308C1-L669C19
 set example ["a","boy","painted","the","girl"]
 # e.g. [1,7,9,1,7] or "a boy painted the girl"
 np_det_mask = select(7, pos_tokens, ==) and select(pos_tokens, 1, ==) and select(indices+1, indices, ==);

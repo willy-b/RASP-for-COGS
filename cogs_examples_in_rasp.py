@@ -268,7 +268,7 @@ def replace_out_of_vocab_words_with_unknown_token_and_remove_period(sentence):
   return " ".join([word if word in main_train_vocab else "unknown" for word in words])
 # e.g. transforms ['A rose was helped by a dog .', 'William painted Ying .']
 # into ['A rose was helped by a dog', 'William painted unknown']
-# (where "A rose was helped by a dog ." is the first line in the official COGS examples, so all in training vocabulary; "William painted Ying" is an example of mixed in-vocabulary/out-of-vocabulary content chosen as the author is named William and their partner is named Ying ( https://github.com/i-am-ying-li ))
+# (where "A rose was helped by a dog ." is the first line in the official COGS examples, so all in training vocabulary; "William painted Ying" is an example of mixed in-vocabulary/out-of-vocabulary content)
 sentences = [replace_out_of_vocab_words_with_unknown_token_and_remove_period(sentence) for sentence in sentences]
 
 lfs_computed = []
