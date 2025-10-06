@@ -1,3 +1,6 @@
+THIS IS NOT AN ANONYMOUS REPO! THERE IS A PUBLIC REPO INTENTIONALLY CONTINUOUSLY UPDATED FROM early 2025 - HAS BEEN AND WILL REMAIN VISIBLE.
+THIS IS A MIRROR BRANCH USED BY 4open.science WHICH APPLIES ADDITIONAL FILTERS JUST TO HELP REVIEWERS WHO WANT TO AVOID SEEING THE AUTHOR'S NAME WHEN READING.
+
 # RASP-for-COGS
 
 To support Kim and Linzen 2020's original COGS format ( https://aclanthology.org/2020.emnlp-main.731/ ) (vs the simplified and semantically equivalent ReCOGS from (Wu et al 2023; https://doi.org/10.1162/tacl_a_00623 ), which we built a model for earlier in RASP described at _/RASP-for-ReCOGS ).
