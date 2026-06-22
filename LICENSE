@@ -27,9 +27,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 --
 
-We also ask that you please cite https://github.com/willy-b/RASP-for-COGS
-and/or an associated scientific publication
-(e.g. the RASP-for-ReCOGS paper https://arxiv.org/abs/2504.15349 which
-also announces this work until there is a separate paper with full RASP-for-COGS
-results in which case that should be cited instead).
+We also ask that you please cite this repository https://github.com/willy-b/RASP-for-COGS
+and/or the associated scientific paper at https://arxiv.org/abs/2504.15349 .
+
 Thanks for reading!
